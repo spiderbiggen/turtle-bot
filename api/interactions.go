@@ -12,6 +12,7 @@ import (
 // register the slash command on Discord.
 var SlashCommandMap = disgoslash.NewSlashCommandMap(
 	commands.CreateSleepCommand(),
+	commands.CreateApexCommand(),
 )
 
 // Handler is exported for use as a vercel serverless function

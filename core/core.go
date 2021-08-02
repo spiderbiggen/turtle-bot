@@ -9,7 +9,7 @@ import (
 // a slash command to.
 var GuildIDs = []string{os.Getenv("GUILD_ID")}
 
-// Global indicates whether or not a slash command should be registered globally
+// Global indicates whether a slash command should be registered globally
 // across all Guilds the bot has access to.
 var Global = true
 
