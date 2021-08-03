@@ -2,15 +2,13 @@ package main
 
 import (
 	"github.com/wafer-bw/disgoslash"
-	"os"
-
 	"weeb_bot/api"
 	"weeb_bot/core"
 )
 
 func main() {
 	ids := core.GuildIDs
-	if os.Getenv("ENV") == "PRODUCTION" {
+	if core.Global {
 		ids = []string{}
 	}
 	syncer := &disgoslash.Syncer{

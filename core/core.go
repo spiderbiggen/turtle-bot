@@ -11,7 +11,7 @@ var GuildIDs = []string{os.Getenv("GUILD_ID")}
 
 // Global indicates whether a slash command should be registered globally
 // across all Guilds the bot has access to.
-var Global = true
+var Global = os.Getenv("ENV") == "PRODUCTION"
 
 // Credentials holds your Discord Application's secret credentials.
 //
