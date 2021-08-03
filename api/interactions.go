@@ -13,6 +13,7 @@ import (
 var SlashCommandMap = disgoslash.NewSlashCommandMap(
 	commands.CreateSleepCommand(),
 	commands.CreateApexCommand(),
+	commands.CreatePlayCommand(),
 )
 
 // Handler is exported for use as a vercel serverless function
