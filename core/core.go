@@ -5,13 +5,20 @@ import (
 	"os"
 )
 
-// GuildIDs holds the list of Guild (server) IDs you would like to register
-// a slash command to.
-var GuildIDs = []string{os.Getenv("GUILD_ID")}
-
 // Global indicates whether a slash command should be registered globally
 // across all Guilds the bot has access to.
 var Global = os.Getenv("ENV") == "PRODUCTION"
+
+func guildIDs() []string {
+	if Global {
+		return []string{}
+	}
+	return []string{os.Getenv("GUILD_ID")}
+}
+
+// GuildIDs holds the list of Guild (server) IDs you would like to register
+// a slash command to.
+var GuildIDs = guildIDs()
 
 // Credentials holds your Discord Application's secret credentials.
 //
