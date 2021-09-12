@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"github.com/wafer-bw/disgoslash"
 	"github.com/wafer-bw/disgoslash/discord"
-	"math/rand"
 	"weeb_bot/core"
+	"weeb_bot/lib/random"
 	"weeb_bot/lib/tenor"
 )
 
@@ -22,7 +22,7 @@ func apex(request *discord.InteractionRequest) *discord.InteractionResponse {
 	}
 
 	gifs := tenor.Top("Apex Legends")
-	gif := gifs[rand.Intn(len(gifs))]
+	gif := gifs[random.Intn(len(gifs))]
 	if user != nil {
 		return &discord.InteractionResponse{
 			Type: discord.InteractionResponseTypeChannelMessageWithSource,

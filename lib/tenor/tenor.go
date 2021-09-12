@@ -25,13 +25,12 @@ func getTenorUrl(endpoint tenorEndpoint, query string) (*url.URL, error) {
 		return nil, err
 	}
 	q := u.Query()
-	// TODO
 	q.Set("key", os.Getenv("TENOR_KEY"))
 	q.Set("q", query)
 	q.Set("locale", "en")
 	q.Set("contentfilter", "off")
 	q.Set("media_filter", "minimal")
-	q.Set("limt", "50")
+	q.Set("limit", "50")
 	u.RawQuery = q.Encode()
 	return u, nil
 }
