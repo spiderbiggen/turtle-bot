@@ -8,9 +8,15 @@ import (
 	"weeb_bot/lib/tenor"
 )
 
+var queries = [...]string{"night", "sleep"}
+
 func sleep(request *discord.InteractionRequest) *discord.InteractionResponse {
-	// Your custom code goes here!
-	gifs := tenor.Random("Sleep Well")
+	rnd := random.Random()
+	q := queries[rnd.Intn(len(queries))]
+	gifs, err := tenor.Random(q)
+	if err != nil {
+		return tenorError(err)
+	}
 	gif := gifs[random.Intn(len(gifs))]
 	return &discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeChannelMessageWithSource,

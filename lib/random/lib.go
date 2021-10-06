@@ -5,7 +5,10 @@ import (
 	"time"
 )
 
+func Random() *rand.Rand {
+	return rand.New(rand.NewSource(time.Now().UnixNano()))
+}
+
 func Intn(max int) int {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return r.Intn(max)
+	return Random().Intn(max)
 }

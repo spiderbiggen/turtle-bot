@@ -21,7 +21,10 @@ func play(request *discord.InteractionRequest) *discord.InteractionResponse {
 		}
 	}
 
-	gifs := tenor.Top("Games")
+	gifs, err := tenor.Top("Games")
+	if err != nil {
+		return tenorError(err)
+	}
 	gif := gifs[random.Intn(len(gifs))]
 	if user != nil {
 		return &discord.InteractionResponse{

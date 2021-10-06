@@ -21,7 +21,10 @@ func apex(request *discord.InteractionRequest) *discord.InteractionResponse {
 		}
 	}
 
-	gifs := tenor.Top("Apex Legends")
+	gifs, err := tenor.Top("Apex Legends")
+	if err != nil {
+		return tenorError(err)
+	}
 	gif := gifs[random.Intn(len(gifs))]
 	if user != nil {
 		return &discord.InteractionResponse{
