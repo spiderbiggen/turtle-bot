@@ -14,6 +14,7 @@ var SlashCommandMap = disgoslash.NewSlashCommandMap(
 	commands.CreateSleepCommand(),
 	commands.CreateApexCommand(),
 	commands.CreatePlayCommand(),
+	commands.CreateAoeCommand(),
 )
 
 // Handler is exported for use as a vercel serverless function
