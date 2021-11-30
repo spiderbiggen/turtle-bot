@@ -6,7 +6,7 @@ import (
 )
 
 func tenorError(err error) *discord.InteractionResponse {
-	log.ErrorLogger.Println("Tenor Failed somewhere")
+	log.ErrorLogger.Println("Tenor Failed somewhere", err)
 	return &discord.InteractionResponse{
 		Type: discord.InteractionResponseTypeChannelMessageWithSource,
 		Data: &discord.InteractionApplicationCommandCallbackData{
