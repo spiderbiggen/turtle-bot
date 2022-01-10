@@ -21,7 +21,7 @@ func chopChop(request *discord.InteractionRequest) *discord.InteractionResponse 
 		}
 	}
 
-	gifs, err := tenor.Top("chop chop")
+	gifs, err := tenor.Top("hurry up")
 	if err != nil {
 		return tenorError(err)
 	}
@@ -49,7 +49,7 @@ func chopChop(request *discord.InteractionRequest) *discord.InteractionResponse 
 }
 
 var chopChopCommand = &discord.ApplicationCommand{
-	Name:              "chopchop",
+	Name:              "hurry",
 	Description:       "Hurry up",
 	DefaultPermission: true,
 }
