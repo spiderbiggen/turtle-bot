@@ -52,6 +52,14 @@ var chopChopCommand = &discord.ApplicationCommand{
 	Name:              "hurry",
 	Description:       "Hurry up",
 	DefaultPermission: true,
+	Options: []*discord.ApplicationCommandOption{
+		{
+			Type:        discord.ApplicationCommandOptionTypeUser,
+			Name:        "name",
+			Description: "Enter the name of a user",
+			Required:    false,
+		},
+	},
 }
 
 func CreateChopChopCommand() disgoslash.SlashCommand {
