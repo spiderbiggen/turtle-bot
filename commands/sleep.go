@@ -10,7 +10,7 @@ import (
 
 var queries = [...]string{"night", "sleep"}
 
-func sleep(request *discord.InteractionRequest) *discord.InteractionResponse {
+func sleep(_ *discord.InteractionRequest) *discord.InteractionResponse {
 	rnd := random.Random()
 	q := queries[rnd.Intn(len(queries))]
 	gifs, err := tenor.Random(q, tenor.WithLimit(50))
