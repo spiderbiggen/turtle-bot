@@ -21,7 +21,7 @@ func chopChop(request *discord.InteractionRequest) *discord.InteractionResponse 
 		}
 	}
 
-	gifs, err := tenor.Top("hurry up")
+	gifs, err := tenor.Search("hurry up", tenor.WithLimit(15))
 	if err != nil {
 		return tenorError(err)
 	}

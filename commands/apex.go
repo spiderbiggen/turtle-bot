@@ -21,7 +21,7 @@ func apex(request *discord.InteractionRequest) *discord.InteractionResponse {
 		}
 	}
 
-	gifs, err := tenor.Top("Apex Legends")
+	gifs, err := tenor.Search("Apex Legends", tenor.WithLimit(50))
 	if err != nil {
 		return tenorError(err)
 	}

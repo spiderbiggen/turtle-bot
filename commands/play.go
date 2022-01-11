@@ -21,7 +21,7 @@ func play(request *discord.InteractionRequest) *discord.InteractionResponse {
 		}
 	}
 
-	gifs, err := tenor.Top("Games")
+	gifs, err := tenor.Search("Games", tenor.WithLimit(50))
 	if err != nil {
 		return tenorError(err)
 	}
