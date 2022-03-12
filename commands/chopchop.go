@@ -10,40 +10,25 @@ import (
 )
 
 func chopChop(request *discord.InteractionRequest) *discord.InteractionResponse {
-	options := request.Data.Options
-	var user *string
-	for _, option := range options {
-		if option.Name == "name" {
-			if _user, ok := option.UserIDValue(); ok {
-				user = &_user
-			}
-			break
-		}
-	}
-
 	gifs, err := tenor.Search("hurry up", tenor.WithLimit(15))
 	if err != nil {
 		return tenorError(err)
 	}
 	gif := gifs[random.Intn(len(gifs))]
-	if user != nil {
-		return &discord.InteractionResponse{
-			Type: discord.InteractionResponseTypeChannelMessageWithSource,
-			Data: &discord.InteractionApplicationCommandCallbackData{
-				Content: fmt.Sprintf("Hurry up <@%s>\n%s", *user, gif.URL),
-				AllowedMentions: &discord.AllowedMentions{
-					Parse: []discord.AllowedMentionType{discord.AllowedMentionTypeUserMentions},
-					Users: []string{},
-				},
+
+	mention := "@here"
+	if user := UserFromOptions(request.Data.Options); user != nil {
+		mention = fmt.Sprintf("<@%s>", *user)
+	}
+
+	return &discord.InteractionResponse{
+		Type: discord.InteractionResponseTypeChannelMessageWithSource,
+		Data: &discord.InteractionApplicationCommandCallbackData{
+			Content: fmt.Sprintf("Hurry up %s\n%s", mention, gif.URL),
+			AllowedMentions: &discord.AllowedMentions{
+				Parse: []discord.AllowedMentionType{discord.AllowedMentionTypeUserMentions},
 			},
-		}
-	} else {
-		return &discord.InteractionResponse{
-			Type: discord.InteractionResponseTypeChannelMessageWithSource,
-			Data: &discord.InteractionApplicationCommandCallbackData{
-				Content: fmt.Sprintf("Hurry up @here\n%s", gif.URL),
-			},
-		}
+		},
 	}
 
 }

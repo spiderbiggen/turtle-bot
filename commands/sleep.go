@@ -11,8 +11,7 @@ import (
 var queries = [...]string{"night", "sleep"}
 
 func sleep(_ *discord.InteractionRequest) *discord.InteractionResponse {
-	rnd := random.Random()
-	q := queries[rnd.Intn(len(queries))]
+	q := queries[random.Random().Intn(len(queries))]
 	gifs, err := tenor.Random(q, tenor.WithLimit(50))
 	if err != nil {
 		return tenorError(err)

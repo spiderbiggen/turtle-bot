@@ -10,25 +10,27 @@ import (
 )
 
 type Response struct {
-	Results []Results `json:"results"`
-	Next    string    `json:"next"`
+	Results ResultList `json:"results"`
+	Next    string     `json:"next"`
 }
 
-type Results struct {
+type Result struct {
 	ID    string `json:"id"`
 	URL   string `json:"url"`
 	Title string `json:"title"`
 }
 
-func Random(query string, opts ...Opt) ([]Results, error) {
+type ResultList []Result
+
+func Random(query string, opts ...Opt) (ResultList, error) {
 	return newQuery(random, query, opts...).request()
 }
 
-func Search(query string, opts ...Opt) ([]Results, error) {
+func Search(query string, opts ...Opt) (ResultList, error) {
 	return newQuery(search, query, opts...).request()
 }
 
-func Trending(opts ...Opt) ([]Results, error) {
+func Trending(opts ...Opt) ([]Result, error) {
 	return newQuery(search, "", opts...).request()
 }
 
@@ -165,7 +167,7 @@ func newQuery(e endpoint, q string, opts ...Opt) tenorQuery {
 	return t
 }
 
-func (t tenorQuery) request() ([]Results, error) {
+func (t tenorQuery) request() (ResultList, error) {
 	var err error
 	var u *url.URL
 	if u, err = t.Url(); err != nil {
