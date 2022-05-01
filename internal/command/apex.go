@@ -1,4 +1,4 @@
-package commands
+package command
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ func apexHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 
 	var users []string
 	mention := "@here"
-	if user := UserFromOptions(s, i); user != nil {
+	if user := userFromOptions(s, i); user != nil {
 		mention = fmt.Sprintf("<@%s>", user.ID)
 		users = append(users, user.ID)
 	}
@@ -51,6 +51,6 @@ func apexHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 }
 
-func CreateApexCommand() (*discordgo.ApplicationCommand, func(*discordgo.Session, *discordgo.InteractionCreate)) {
+func Apex() (*discordgo.ApplicationCommand, Handler) {
 	return apexCommand, apexHandler
 }

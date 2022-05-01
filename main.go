@@ -1,17 +1,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
-	commands2 "weeb_bot/internal/commands"
+	"strings"
+	"weeb_bot/internal/command"
 	"weeb_bot/internal/nyaa"
 )
 
-var commandHandlers = make(map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate))
+var (
+	commandHandlers    = make(map[string]command.Handler)
+	registeredCommands []*discordgo.ApplicationCommand
+)
 
 func main() {
 	log.SetReportCaller(true)
@@ -40,12 +43,12 @@ func main() {
 		}
 	}(d)
 
-	registerCommands(d)
+	registerCommands(d, command.Sleep, command.Apex, command.Play, command.Hurry)
 
-	_, err = nyaa.GetAnime(context.Background())
-	if err != nil {
-		log.Fatal(err)
-	}
+	//_, err = nyaa.GetAnime(context.Background())
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
 	//c := map[string]string{
 	//	"825808364649971712": "825808364649971715",
 	//}
@@ -71,22 +74,21 @@ func main() {
 	log.Println("Gracefully shutting down")
 }
 
-func registerCommands(s *discordgo.Session) {
-	cmds := []func() (*discordgo.ApplicationCommand, func(*discordgo.Session, *discordgo.InteractionCreate)){
-		commands2.CreateSleepCommand,
-		commands2.CreateApexCommand,
-		commands2.CreatePlayCommand,
-		commands2.CreateHurryCommand,
-	}
-	for _, v := range cmds {
-		c, h := v()
-		_, err := s.ApplicationCommandCreate(s.State.User.ID, "", c)
+func registerCommands(s *discordgo.Session, fs ...command.Factory) {
+	var p []string
+	for _, f := range fs {
+		c, h := f()
+		v, err := s.ApplicationCommandCreate(s.State.User.ID, "", c)
 		if err != nil {
 			log.Errorf("Cannot create '%v' command: %v", c.Name, err)
-		} else {
-			commandHandlers[c.Name] = h
+			continue
 		}
+
+		commandHandlers[c.Name] = h
+		registeredCommands = append(registeredCommands, v)
+		p = append(p, c.Name)
 	}
+	log.Infof("Started bot with registered commands: %s.", strings.Join(p, ", "))
 }
 
 func makeEmbed(g nyaa.Group) *discordgo.MessageEmbed {
