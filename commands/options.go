@@ -1,20 +1,20 @@
 package commands
 
 import (
-	"github.com/wafer-bw/disgoslash/discord"
+	"github.com/bwmarrin/discordgo"
 )
 
-// UserFromOptions looks for the first option with the "name" key unless another key is provided.
-func UserFromOptions(options []*discord.ApplicationCommandInteractionDataOption, keys ...string) *string {
-	key := "name"
+// UserFromOptions looks for the first option with the "user" key unless another key is provided.
+func UserFromOptions(s *discordgo.Session, i *discordgo.InteractionCreate, keys ...string) *discordgo.User {
+	key := "user"
 	if len(keys) > 0 {
 		key = keys[0]
 	}
 
-	for _, option := range options {
+	for _, option := range i.Interaction.ApplicationCommandData().Options {
 		if option.Name == key {
-			if _user, ok := option.UserIDValue(); ok {
-				return &_user
+			if user := option.UserValue(s); user != nil {
+				return user
 			}
 		}
 	}
