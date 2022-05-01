@@ -1,16 +1,22 @@
 package commands
 
 import (
-	"github.com/wafer-bw/disgoslash/discord"
-	"weeb_bot/lib/log"
+	"github.com/bwmarrin/discordgo"
+	log "github.com/sirupsen/logrus"
 )
 
-func tenorError(err error) *discord.InteractionResponse {
-	log.ErrorLogger.Println("Tenor Failed somewhere", err)
-	return &discord.InteractionResponse{
-		Type: discord.InteractionResponseTypeChannelMessageWithSource,
-		Data: &discord.InteractionApplicationCommandCallbackData{
-			Content: "Tenor could not be reached.",
+func tenorError(s *discordgo.Session, i *discordgo.InteractionCreate, err error) {
+	log.Errorln("Tenor Failed somewhere", err)
+	err = s.InteractionRespond(
+		i.Interaction,
+		&discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Tenor could not be reached.",
+			},
 		},
+	)
+	if err != nil {
+		log.Errorf("discord failed to send error message: %v", err)
 	}
 }
