@@ -1,4 +1,4 @@
-package commands
+package command
 
 import (
 	"github.com/bwmarrin/discordgo"
@@ -33,6 +33,6 @@ func sleepHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 }
 
-func CreateSleepCommand() (*discordgo.ApplicationCommand, func(*discordgo.Session, *discordgo.InteractionCreate)) {
+func Sleep() (*discordgo.ApplicationCommand, Handler) {
 	return sleepCommand, sleepHandler
 }
