@@ -10,7 +10,7 @@ COPY ./go.sum ./
 RUN go mod download
 
 COPY ./main.go ./main.go
-COPY ./src ./src
+COPY ./internal ./internal
 
 RUN CGO_ENABLED=0 go build -o /weeb_bot
 

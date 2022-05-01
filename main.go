@@ -7,7 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
-	"weeb_bot/commands"
+	commands2 "weeb_bot/internal/commands"
 	"weeb_bot/internal/nyaa"
 )
 
@@ -73,10 +73,10 @@ func main() {
 
 func registerCommands(s *discordgo.Session) {
 	cmds := []func() (*discordgo.ApplicationCommand, func(*discordgo.Session, *discordgo.InteractionCreate)){
-		commands.CreateSleepCommand,
-		commands.CreateApexCommand,
-		commands.CreatePlayCommand,
-		commands.CreateHurryCommand,
+		commands2.CreateSleepCommand,
+		commands2.CreateApexCommand,
+		commands2.CreatePlayCommand,
+		commands2.CreateHurryCommand,
 	}
 	for _, v := range cmds {
 		c, h := v()
