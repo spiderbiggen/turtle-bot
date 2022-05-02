@@ -18,8 +18,10 @@ var (
 
 func main() {
 	log.SetReportCaller(true)
-	log.SetFormatter(&log.JSONFormatter{})
+	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.TraceLevel)
+	hostname, _ := os.Hostname()
+	log.Warnf("Starting Weeb Bot on %s", hostname)
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {

@@ -42,6 +42,8 @@ func playHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	})
 	if err != nil {
 		log.Errorf("discord failed to send response message: %v", err)
+	} else {
+		log.Debugf("Successfully sent message")
 	}
 }
 
