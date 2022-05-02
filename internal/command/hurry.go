@@ -29,11 +29,9 @@ func hurryHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	gif := gifs[random.Intn(len(gifs))]
 
-	var users []string
 	mention := "@here"
 	if user := userFromOptions(s, i); user != nil {
 		mention = fmt.Sprintf("<@%s>", user.ID)
-		users = append(users, user.ID)
 	}
 
 	err = s.InteractionRespond(
@@ -44,7 +42,6 @@ func hurryHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 				Content: fmt.Sprintf("Hurry up %s\n%s", mention, gif.URL),
 				AllowedMentions: &discordgo.MessageAllowedMentions{
 					Parse: []discordgo.AllowedMentionType{discordgo.AllowedMentionTypeUsers},
-					Users: users,
 				},
 			},
 		},
