@@ -20,7 +20,7 @@ type Result struct {
 	Title string `json:"title"`
 }
 
-type ResultList []Result
+type ResultList []*Result
 
 func Random(query string, opts ...Opt) (ResultList, error) {
 	return newQuery(random, query, opts...).request()
@@ -30,7 +30,7 @@ func Search(query string, opts ...Opt) (ResultList, error) {
 	return newQuery(search, query, opts...).request()
 }
 
-func Trending(opts ...Opt) ([]Result, error) {
+func Trending(opts ...Opt) (ResultList, error) {
 	return newQuery(search, "", opts...).request()
 }
 
@@ -168,17 +168,20 @@ func newQuery(e endpoint, q string, opts ...Opt) tenorQuery {
 }
 
 func (t tenorQuery) request() (ResultList, error) {
-	var err error
-	var u *url.URL
-	if u, err = t.Url(); err != nil {
+	u, err := t.Url()
+	if err != nil {
 		return nil, err
 	}
-	var resp *http.Response
-	if resp, err = http.Get(u.String()); err != nil {
+	res, err := http.Get(u.String())
+	if err != nil {
 		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return nil, fmt.Errorf("bogus status: got %v", res.Status)
 	}
 	var response Response
-	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
 		return nil, err
 	}
 	return response.Results, nil

@@ -56,7 +56,7 @@ func (s resultSet) Find(episode Episode) *rssResult {
 	return nil
 }
 
-func GetAnime(ctx context.Context) ([]Group, error) {
+func Episodes(ctx context.Context) ([]Group, error) {
 	results := make(resultSets, len(resolutions), len(resolutions))
 	wg := sync.WaitGroup{}
 	for i, res := range resolutions {

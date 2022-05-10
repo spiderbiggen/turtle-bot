@@ -1,14 +1,17 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 	"weeb_bot/internal/command"
-	"weeb_bot/internal/nyaa"
+	"weeb_bot/internal/worker"
 )
 
 var (
@@ -20,6 +23,9 @@ func main() {
 	log.SetReportCaller(true)
 	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.TraceLevel)
+
+	c := cron.New()
+	defer c.Stop()
 	hostname, _ := os.Hostname()
 	log.Warnf("Starting Weeb Bot on %s", hostname)
 
@@ -27,6 +33,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	d.AddHandler(func(s *discordgo.Session, i *discordgo.Ready) {
+		_, err := c.AddFunc("*/10 * * * *", func() {
+			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancelFunc()
+			worker.NyaaCheck(timeout, s)
+		})
+		if err != nil {
+			log.Fatalln(err)
+		}
+		c.Start()
+	})
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
 			h(s, i)
@@ -47,29 +64,6 @@ func main() {
 
 	registerCommands(d, command.Sleep, command.Apex, command.Play, command.Hurry)
 
-	//_, err = nyaa.GetAnime(context.Background())
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
-	//c := map[string]string{
-	//	"825808364649971712": "825808364649971715",
-	//}
-	//a := map[string][]string{
-	//	"Tate no Yuusha no Nariagari S2": {"825808364649971712"},
-	//}
-	//for _, group := range groups {
-	//	embed := makeEmbed(group)
-	//	if guilds, ok := a[group.AnimeTitle]; ok {
-	//		for _, guild := range guilds {
-	//			if channel, ok := c[guild]; ok {
-	//				_, err := d.ChannelMessageSendEmbed(channel, embed)
-	//				if err != nil {
-	//					log.Fatalln(err)
-	//				}
-	//			}
-	//		}
-	//	}
-	//}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	<-stop
@@ -91,24 +85,4 @@ func registerCommands(s *discordgo.Session, fs ...command.Factory) {
 		p = append(p, c.Name)
 	}
 	log.Infof("Started bot with registered commands: %s.", strings.Join(p, ", "))
-}
-
-func makeEmbed(g nyaa.Group) *discordgo.MessageEmbed {
-	fields := make([]*discordgo.MessageEmbedField, 0, len(g.Downloads))
-	for _, d := range g.Downloads {
-		fields = append(fields, &discordgo.MessageEmbedField{
-			Name:   d.Resolution,
-			Value:  fmt.Sprintf("[torrent](%s)\n[comments](%s)", d.Torrent, d.Comments),
-			Inline: true,
-		})
-	}
-	title := g.AnimeTitle
-	if g.Episode.Number != 0 {
-		title = fmt.Sprintf("%s Ep %d", g.AnimeTitle, g.Episode.Number)
-	}
-	return &discordgo.MessageEmbed{
-		Type:   discordgo.EmbedTypeRich,
-		Title:  title,
-		Fields: fields,
-	}
 }
