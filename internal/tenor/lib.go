@@ -78,13 +78,13 @@ func WithBasicMediaFilter() func(query *tenorQuery) {
 	}
 }
 
-func WithLimit(limit int) func(query *tenorQuery) {
+func WithLimit(limit uint8) func(query *tenorQuery) {
 	return func(query *tenorQuery) {
 		query.Limit = &limit
 	}
 }
 
-func WithPosition(pos int) func(query *tenorQuery) {
+func WithPosition(pos uint8) func(query *tenorQuery) {
 	return func(query *tenorQuery) {
 		query.Position = &pos
 	}
@@ -118,8 +118,8 @@ type tenorQuery struct {
 	Endpoint      endpoint
 	ContentFilter contentFilter
 	MediaFilter   mediaFilter
-	Limit         *int
-	Position      *int
+	Limit         *uint8
+	Position      *uint8
 }
 
 func (t tenorQuery) Url() (url *url.URL, err error) {
@@ -149,11 +149,11 @@ func (t tenorQuery) Url() (url *url.URL, err error) {
 	}
 
 	if t.Limit != nil {
-		q.Set("limit", strconv.Itoa(*t.Limit))
+		q.Set("limit", strconv.FormatUint(uint64(*t.Limit), 10))
 	}
 
 	if t.Position != nil {
-		q.Set("pos", strconv.Itoa(*t.Position))
+		q.Set("pos", strconv.FormatUint(uint64(*t.Position), 10))
 	}
 	url.RawQuery = q.Encode()
 	return
@@ -178,7 +178,7 @@ func (t tenorQuery) request() (ResultList, error) {
 	}
 	defer res.Body.Close()
 	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return nil, fmt.Errorf("bogus status: got %v", res.Status)
+		return nil, fmt.Errorf("invalid status: got %v", res.Status)
 	}
 	var response Response
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {

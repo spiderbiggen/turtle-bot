@@ -4,14 +4,52 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
+	"math/rand"
 	"time"
-	"weeb_bot/internal/random"
 	"weeb_bot/internal/tenor"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 type Handler func(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 type Factory func() (*discordgo.ApplicationCommand, Handler)
+
+type WeightedArgument struct {
+	Query    string
+	Weight   uint8
+	GifCount uint8
+	IsSearch bool
+}
+
+type Args []*WeightedArgument
+
+func (a Args) Random() *WeightedArgument {
+	switch len(a) {
+	case 0:
+		return nil
+	case 1:
+		return a[0]
+	}
+
+	var sum int
+	for _, argument := range a {
+		if argument.Weight == 0 {
+			argument.Weight = 1
+		}
+		sum += int(argument.Weight)
+	}
+	weight := rand.Intn(sum)
+	for _, argument := range a {
+		weight -= int(argument.Weight)
+		if weight < 0 {
+			return argument
+		}
+	}
+	return a[len(a)-1]
+}
 
 func Apex() (*discordgo.ApplicationCommand, Handler) {
 	var apexCommand = &discordgo.ApplicationCommand{
@@ -26,7 +64,7 @@ func Apex() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return apexCommand, gifCommand("Time for Apex\nLet's go %s", "Time for Apex\nLet's go %s\n%s", true, "Apex Legends")
+	return apexCommand, gifCommand("Time for Apex\nLet's go %s", "Time for Apex\nLet's go %s\n%s", true, &WeightedArgument{Query: "Apex Legends"})
 }
 
 func Hurry() (*discordgo.ApplicationCommand, Handler) {
@@ -42,7 +80,7 @@ func Hurry() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return hurryCommand, gifCommand("Hurry up %s", "Hurry up %s\n%s", true, "hurry up")
+	return hurryCommand, gifCommand("Hurry up %s", "Hurry up %s\n%s", true, &WeightedArgument{Query: "hurry up"})
 }
 
 func Play() (*discordgo.ApplicationCommand, Handler) {
@@ -58,7 +96,7 @@ func Play() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return playCommand, gifCommand("Let's go %s", "Let's go %s\n%s", true, "games")
+	return playCommand, gifCommand("Let's go %s", "Let's go %s\n%s", true, &WeightedArgument{Query: "games"})
 }
 
 func Sleep() (*discordgo.ApplicationCommand, Handler) {
@@ -66,7 +104,12 @@ func Sleep() (*discordgo.ApplicationCommand, Handler) {
 		Name:        "sleep",
 		Description: "Gets a random good night gif",
 	}
-	return sleepCommand, gifCommand("Good Night!", "%s", false, "night", "sleep")
+	return sleepCommand, gifCommand(
+		"Good Night!", "%s", false,
+		&WeightedArgument{Query: "sleep", Weight: 80},
+		&WeightedArgument{Query: "night", Weight: 70},
+		&WeightedArgument{Query: "froggers", Weight: 1, GifCount: 1, IsSearch: true},
+	)
 }
 
 // userFromOptions looks for the first option with the "user" key unless another key is provided.
@@ -103,8 +146,13 @@ func tenorError(s *discordgo.Session, i *discordgo.InteractionCreate, err error)
 	}
 }
 
-func gifCommand(baseText, gifText string, withUser bool, queries ...string) Handler {
+func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArgument) Handler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		if len(queries) == 0 {
+			log.Errorf("No queries for command %s", i.Interaction.ID)
+			return
+		}
+
 		var mention string
 		if withUser {
 			if user := userFromOptions(s, i); user != nil {
@@ -116,12 +164,26 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...string) Hand
 
 		c := make(chan *tenor.Result)
 		go func() {
-			q := queries[random.Intn(len(queries))]
-			gifs, err := tenor.Random(q, tenor.WithLimit(50))
+			q := Args(queries).Random()
+			log.Debugf("Using query %+v", q)
+			var gifs tenor.ResultList
+			var err error
+			if q.IsSearch {
+				gifs, err = tenor.Search(q.Query, tenor.WithLimit(1))
+			} else {
+				gifs, err = tenor.Random(q.Query, tenor.WithLimit(1))
+			}
 			if err != nil {
 				tenorError(s, i, err)
+				c <- nil
+				return
 			}
-			c <- gifs[random.Intn(len(gifs))]
+			if len(gifs) == 0 {
+				log.Warnf("No gifs found for query %s", q.Query)
+				c <- nil
+				return
+			}
+			c <- gifs[0]
 		}()
 
 		var err error
@@ -130,6 +192,9 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...string) Hand
 		for {
 			select {
 			case gif := <-c:
+				if gif == nil {
+					return
+				}
 				if withUser {
 					message = fmt.Sprintf(gifText, mention, gif.URL)
 				} else {
