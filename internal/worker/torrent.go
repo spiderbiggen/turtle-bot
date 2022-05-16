@@ -11,48 +11,49 @@ import (
 	"weeb_bot/internal/nyaa"
 )
 
-var lastCheck = time.Now()
-
-func NyaaCheck(ctx context.Context, discord *discordgo.Session) {
-	checkTime := time.Now()
-	episodes, err := nyaa.Episodes(ctx)
-	if err != nil {
-		log.Fatal(err)
-	}
-	c := map[string]string{
-		"825808364649971712": "825808364649971715",
-	}
-	a := map[string][]string{
-		"Tate no Yuusha no Nariagari S2":                    {"825808364649971712"},
-		"Spy x Family":                                      {"825808364649971712"},
-		"Gaikotsu Kishi-sama, Tadaima Isekai e Odekakechuu": {"825808364649971712"},
-	}
-	wg := sync.WaitGroup{}
-	for _, group := range episodes {
-		if group.FirstPublishedDate.Before(lastCheck) {
-			continue
+func NyaaCheck() Worker {
+	var lastNyaaCheck = time.Now()
+	return func(ctx context.Context, discord *discordgo.Session) {
+		checkTime := time.Now()
+		episodes, err := nyaa.Episodes(ctx)
+		if err != nil {
+			log.Fatal(err)
 		}
-		wg.Add(1)
-		go func(ctx context.Context, group nyaa.Group, wg *sync.WaitGroup) {
-			defer wg.Done()
-			var embed *discordgo.MessageEmbed
-			if guilds, ok := a[group.AnimeTitle]; ok {
-				for _, guild := range guilds {
-					if channel, ok := c[guild]; ok {
-						if embed == nil {
-							embed = makeEmbed(ctx, group)
-						}
-						_, err := discord.ChannelMessageSendEmbed(channel, embed)
-						if err != nil {
-							log.Errorln(err)
+		c := map[string]string{
+			"825808364649971712": "825808364649971715",
+		}
+		a := map[string][]string{
+			"Tate no Yuusha no Nariagari S2":                    {"825808364649971712"},
+			"Spy x Family":                                      {"825808364649971712"},
+			"Gaikotsu Kishi-sama, Tadaima Isekai e Odekakechuu": {"825808364649971712"},
+		}
+		wg := sync.WaitGroup{}
+		for _, group := range episodes {
+			if group.FirstPublishedDate.Before(lastNyaaCheck) {
+				continue
+			}
+			wg.Add(1)
+			go func(ctx context.Context, group nyaa.Group, wg *sync.WaitGroup) {
+				defer wg.Done()
+				var embed *discordgo.MessageEmbed
+				if guilds, ok := a[group.AnimeTitle]; ok {
+					for _, guild := range guilds {
+						if channel, ok := c[guild]; ok {
+							if embed == nil {
+								embed = makeEmbed(ctx, group)
+							}
+							_, err := discord.ChannelMessageSendEmbed(channel, embed)
+							if err != nil {
+								log.Errorln(err)
+							}
 						}
 					}
 				}
-			}
-		}(ctx, group, &wg)
+			}(ctx, group, &wg)
+		}
+		wg.Wait()
+		lastNyaaCheck = checkTime
 	}
-	wg.Wait()
-	lastCheck = checkTime
 }
 
 func coverImage(i ...*kitsu.ImageSet) string {

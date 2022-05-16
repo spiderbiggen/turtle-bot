@@ -9,10 +9,6 @@ import (
 	"weeb_bot/internal/tenor"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 type Handler func(s *discordgo.Session, i *discordgo.InteractionCreate)
 
 type Factory func() (*discordgo.ApplicationCommand, Handler)

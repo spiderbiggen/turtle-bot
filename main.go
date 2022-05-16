@@ -6,6 +6,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
+	"math/rand"
 	"os"
 	"os/signal"
 	"strings"
@@ -24,6 +25,8 @@ func main() {
 	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.TraceLevel)
 
+	rand.Seed(time.Now().UnixNano())
+
 	c := cron.New()
 	defer c.Stop()
 	hostname, _ := os.Hostname()
@@ -34,10 +37,11 @@ func main() {
 		log.Fatal(err)
 	}
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.Ready) {
+		check := worker.NyaaCheck()
 		_, err := c.AddFunc("*/10 * * * *", func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancelFunc()
-			worker.NyaaCheck(timeout, s)
+			check(timeout, s)
 		})
 		if err != nil {
 			log.Fatalln(err)
