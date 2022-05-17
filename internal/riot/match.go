@@ -146,25 +146,23 @@ type Challenges struct {
 	WardTakedownsBefore20M                    int     `json:"wardTakedownsBefore20M"`
 	WardsGuarded                              int     `json:"wardsGuarded"`
 }
-type StatPerks struct {
-	Defense int `json:"defense"`
-	Flex    int `json:"flex"`
-	Offense int `json:"offense"`
-}
-type Selections struct {
-	Perk int `json:"perk"`
-	Var1 int `json:"var1"`
-	Var2 int `json:"var2"`
-	Var3 int `json:"var3"`
-}
-type Styles struct {
-	Description string        `json:"description"`
-	Selections  []*Selections `json:"selections"`
-	Style       int           `json:"style"`
-}
+
 type Perks struct {
-	StatPerks *StatPerks `json:"statPerks"`
-	Styles    []Styles   `json:"styles"`
+	StatPerks *struct {
+		Defense int `json:"defense"`
+		Flex    int `json:"flex"`
+		Offense int `json:"offense"`
+	} `json:"statPerks"`
+	Styles []struct {
+		Description string `json:"description"`
+		Style       int    `json:"style"`
+		Selections  []*struct {
+			Perk int `json:"perk"`
+			Var1 int `json:"var1"`
+			Var2 int `json:"var2"`
+			Var3 int `json:"var3"`
+		} `json:"selections"`
+	} `json:"styles"`
 }
 
 type Participants struct {
@@ -276,44 +274,24 @@ type Participants struct {
 	WardsPlaced                    int         `json:"wardsPlaced"`
 	Win                            bool        `json:"win"`
 }
-type Bans struct {
-	ChampionID int `json:"championId"`
-	PickTurn   int `json:"pickTurn"`
-}
-type Baron struct {
-	First bool `json:"first"`
-	Kills int  `json:"kills"`
-}
-type Champion struct {
-	First bool `json:"first"`
-	Kills int  `json:"kills"`
-}
-type Dragon struct {
-	First bool `json:"first"`
-	Kills int  `json:"kills"`
-}
-type Inhibitor struct {
-	First bool `json:"first"`
-	Kills int  `json:"kills"`
-}
-type RiftHerald struct {
-	First bool `json:"first"`
-	Kills int  `json:"kills"`
-}
-type Tower struct {
+
+type Objective struct {
 	First bool `json:"first"`
 	Kills int  `json:"kills"`
 }
 type Objectives struct {
-	Baron      *Baron      `json:"baron"`
-	Champion   *Champion   `json:"champion"`
-	Dragon     *Dragon     `json:"dragon"`
-	Inhibitor  *Inhibitor  `json:"inhibitor"`
-	RiftHerald *RiftHerald `json:"riftHerald"`
-	Tower      *Tower      `json:"tower"`
+	Baron      *Objective `json:"baron"`
+	Champion   *Objective `json:"champion"`
+	Dragon     *Objective `json:"dragon"`
+	Inhibitor  *Objective `json:"inhibitor"`
+	RiftHerald *Objective `json:"riftHerald"`
+	Tower      *Objective `json:"tower"`
 }
 type Teams struct {
-	Bans       []*Bans     `json:"bans"`
+	Bans []*struct {
+		ChampionID int `json:"championId"`
+		PickTurn   int `json:"pickTurn"`
+	} `json:"bans"`
 	Objectives *Objectives `json:"objectives"`
 	TeamID     int         `json:"teamId"`
 	Win        bool        `json:"win"`

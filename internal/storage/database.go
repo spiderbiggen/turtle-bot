@@ -33,11 +33,20 @@ CREATE TABLE IF NOT EXISTS league_user (
 	profile_icon_id INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS discord_user_has_user (
+CREATE TABLE IF NOT EXISTS discord_user_has_league_user (
   discord_id TEXT,
   league_id TEXT,
   PRIMARY KEY (discord_id, league_id),
   FOREIGN KEY (league_id) REFERENCES league_user (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS league_match (
+    id TEXT PRIMARY KEY,
+    retrieved BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE IF NOT EXISTS league_match_has_players (
+    
 );
 `
 
