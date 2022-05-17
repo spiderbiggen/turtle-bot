@@ -40,10 +40,13 @@ func downloadMatches(ctx context.Context, client *riot.Client, summoners []*riot
 			}
 		}
 	}
-	r := make([]string, 0, 5)
+	r := make([]string, 0, 10)
 	for id := range matchSet {
 		if _, ok := retrievedMatchSet[id]; !ok {
 			r = append(r, id)
+		}
+		if len(r) == 10 {
+			break
 		}
 	}
 	// TODO get batch matches
