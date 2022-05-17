@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"github.com/robfig/cron/v3"
+	cronLib "github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 	"weeb_bot/internal/command"
+	"weeb_bot/internal/riot"
+	"weeb_bot/internal/storage"
 	"weeb_bot/internal/worker"
 )
 
@@ -21,33 +23,32 @@ var (
 )
 
 func main() {
+	rand.Seed(time.Now().UnixNano())
 	log.SetReportCaller(true)
-	//log.SetFormatter(&log.JSONFormatter{})
 	log.SetLevel(log.TraceLevel)
 
-	rand.Seed(time.Now().UnixNano())
-
-	c := cron.New()
-	defer c.Stop()
 	hostname, _ := os.Hostname()
 	log.Warnf("Starting Weeb Bot on %s", hostname)
+
+	cron := cronLib.New()
+	defer cron.Stop()
+
+	log.Infoln("Migrating database...")
+	db := storage.DefaultClient
+	err := db.Migrate()
+	if err != nil {
+		log.Errorf("Error migrating database: %v", err)
+	} else {
+		log.Infoln("Finished migration")
+	}
+
+	client := riot.New(os.Getenv("RIOT_KEY"))
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(func(s *discordgo.Session, i *discordgo.Ready) {
-		check := worker.NyaaCheck()
-		_, err := c.AddFunc("*/10 * * * *", func() {
-			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancelFunc()
-			check(timeout, s)
-		})
-		if err != nil {
-			log.Fatalln(err)
-		}
-		c.Start()
-	})
+	d.AddHandler(readyHandler(cron, db, client))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
 			h(s, i)
@@ -57,14 +58,9 @@ func main() {
 	// Open a websocket connection to Discord and begin listening.
 	err = d.Open()
 	if err != nil {
-		log.Fatal("error opening connection,", err)
+		log.Fatal("Error opening discord connection,", err)
 	}
-	defer func(d *discordgo.Session) {
-		err := d.Close()
-		if err != nil {
-			log.Fatalln(err)
-		}
-	}(d)
+	defer d.Close()
 
 	registerCommands(d, command.Sleep, command.Apex, command.Play, command.Hurry, command.Morbius, command.Morbin)
 
@@ -89,4 +85,31 @@ func registerCommands(s *discordgo.Session, fs ...command.Factory) {
 		p = append(p, c.Name)
 	}
 	log.Infof("Started bot with registered commands: %s.", strings.Join(p, ", "))
+}
+
+func readyHandler(cron *cronLib.Cron, db *storage.Client, client *riot.Client) func(s *discordgo.Session, i *discordgo.Ready) {
+	return func(s *discordgo.Session, i *discordgo.Ready) {
+		var err error
+		nyaa := worker.NyaaCheck()
+		_, err = cron.AddFunc("*/10 * * * *", func() {
+			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancelFunc()
+			nyaa(timeout, s)
+		})
+		if err != nil {
+			log.Fatalln(err)
+		}
+		if db.Enabled {
+			rito := worker.MatchChecker(db, client)
+			_, err = cron.AddFunc("*/1 * * * *", func() {
+				timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancelFunc()
+				rito(timeout, s)
+			})
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
+		cron.Start()
+	}
 }
