@@ -41,12 +41,20 @@ CREATE TABLE IF NOT EXISTS discord_user_has_league_user (
 );
 
 CREATE TABLE IF NOT EXISTS league_match (
-    id TEXT PRIMARY KEY,
-    retrieved BOOLEAN NOT NULL DEFAULT FALSE
+    id BIGINT PRIMARY KEY
+    
+);
+
+CREATE TABLE IF NOT EXISTS league_match_has_teams (
+    player_id TEXT PRIMARY KEY,
+    match_id BIGINT PRIMARY KEY,
+    team_id
 );
 
 CREATE TABLE IF NOT EXISTS league_match_has_players (
-    
+    player_id TEXT PRIMARY KEY,
+    match_id BIGINT PRIMARY KEY,
+    team_id INT NOT NULL,
 );
 `
 
