@@ -148,6 +148,7 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 			log.Errorf("No queries for command %s", i.Interaction.ID)
 			return
 		}
+		tt := time.After(2 * time.Second)
 
 		var mention string
 		if withUser {
@@ -210,7 +211,7 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 					log.Errorf("discord failed to complete interaction message: %v", err)
 				}
 				return
-			case <-time.After(2500 * time.Millisecond):
+			case <-tt:
 				sent = true
 				if withUser {
 					message = fmt.Sprintf(baseText, mention)
