@@ -11,6 +11,9 @@ import (
 	"weeb_bot/internal/nyaa"
 )
 
+type GuildId string
+type ChannelId string
+
 func NyaaCheck() Worker {
 	var lastNyaaCheck = time.Now()
 	return func(ctx context.Context, discord *discordgo.Session) {
@@ -19,12 +22,13 @@ func NyaaCheck() Worker {
 		if err != nil {
 			log.Fatal(err)
 		}
-		c := map[string]string{
+		c := map[GuildId]ChannelId{
 			"825808364649971712": "825808364649971715",
 		}
-		a := map[string][]string{
-			"Tate no Yuusha no Nariagari S2":                    {"825808364649971712"},
-			"Spy x Family":                                      {"825808364649971712"},
+		a := map[string][]GuildId{
+			"Paripi Koumei":                  {"825808364649971712"},
+			"Tate no Yuusha no Nariagari S2": {"825808364649971712"},
+			"Spy x Family":                   {"825808364649971712"},
 			"Gaikotsu Kishi-sama, Tadaima Isekai e Odekakechuu": {"825808364649971712"},
 		}
 		wg := sync.WaitGroup{}
@@ -42,7 +46,7 @@ func NyaaCheck() Worker {
 							if embed == nil {
 								embed = makeEmbed(ctx, group)
 							}
-							_, err := discord.ChannelMessageSendEmbed(channel, embed)
+							_, err := discord.ChannelMessageSendEmbed(string(channel), embed)
 							if err != nil {
 								log.Errorln(err)
 							}
