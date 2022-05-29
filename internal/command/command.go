@@ -14,6 +14,7 @@ type Handler func(s *discordgo.Session, i *discordgo.InteractionCreate)
 type Factory func() (*discordgo.ApplicationCommand, Handler)
 
 type WeightedArgument struct {
+	Url      string
 	Query    string
 	Weight   uint8
 	GifCount uint8
@@ -105,6 +106,17 @@ func Sleep() (*discordgo.ApplicationCommand, Handler) {
 		&WeightedArgument{Query: "sleep", Weight: 80},
 		&WeightedArgument{Query: "night", Weight: 70},
 		&WeightedArgument{Query: "froggers", Weight: 1, GifCount: 1, IsSearch: true},
+	)
+}
+
+func Morbius() (*discordgo.ApplicationCommand, Handler) {
+	var sleepCommand = &discordgo.ApplicationCommand{
+		Name: "morbius",
+	}
+	return sleepCommand, gifCommand(
+		"You got morbed", "%s", false,
+		&WeightedArgument{Query: "Morbius"},
+		&WeightedArgument{Query: "Morbin"},
 	)
 }
 

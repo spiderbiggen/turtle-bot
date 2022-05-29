@@ -66,7 +66,7 @@ func main() {
 		}
 	}(d)
 
-	registerCommands(d, command.Sleep, command.Apex, command.Play, command.Hurry)
+	registerCommands(d, command.Sleep, command.Apex, command.Play, command.Hurry, command.Morbius)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
