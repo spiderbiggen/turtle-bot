@@ -181,10 +181,15 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 			}
 		}
 
-		c := make(chan *tenor.Result)
+		c := make(chan string)
 		go func() {
 			q := Args(queries).Random()
 			log.Debugf("Using query %+v", q)
+			if q.Url != "" {
+				c <- q.Url
+				return
+			}
+
 			var gifs tenor.ResultList
 			var err error
 			if q.IsSearch {
@@ -194,15 +199,15 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 			}
 			if err != nil {
 				tenorError(s, i, err)
-				c <- nil
+				c <- ""
 				return
 			}
 			if len(gifs) == 0 {
 				log.Warnf("No gifs found for query %s", q.Query)
-				c <- nil
+				c <- ""
 				return
 			}
-			c <- gifs[0]
+			c <- gifs[0].URL
 		}()
 
 		var err error
@@ -211,13 +216,13 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 		for {
 			select {
 			case gif := <-c:
-				if gif == nil {
+				if gif == "" {
 					return
 				}
 				if withUser {
-					message = fmt.Sprintf(gifText, mention, gif.URL)
+					message = fmt.Sprintf(gifText, mention, gif)
 				} else {
-					message = fmt.Sprintf(gifText, gif.URL)
+					message = fmt.Sprintf(gifText, gif)
 				}
 				if sent {
 					_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: message})
