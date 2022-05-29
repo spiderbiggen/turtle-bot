@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestCommand(t *testing.T) {
+func TestWeightedArgument(t *testing.T) {
 	runs := 100_000
 	tolerance := 0.01
 	weight := 0.0
