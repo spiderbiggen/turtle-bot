@@ -109,9 +109,19 @@ func Sleep() (*discordgo.ApplicationCommand, Handler) {
 	)
 }
 
+func Morbin() (*discordgo.ApplicationCommand, Handler) {
+	var sleepCommand = &discordgo.ApplicationCommand{
+		Name:        "morbin",
+		Description: "Morbin",
+	}
+	_, c := Morbius()
+	return sleepCommand, c
+}
+
 func Morbius() (*discordgo.ApplicationCommand, Handler) {
 	var sleepCommand = &discordgo.ApplicationCommand{
-		Name: "morbius",
+		Name:        "morbius",
+		Description: "Morbius",
 	}
 	return sleepCommand, gifCommand(
 		"You got morbed", "%s", false,
