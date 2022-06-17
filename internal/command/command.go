@@ -147,30 +147,14 @@ func userFromOptions(s *discordgo.Session, i *discordgo.InteractionCreate, keys 
 	return nil
 }
 
-func tenorError(s *discordgo.Session, i *discordgo.InteractionCreate, err error) {
-	log.Errorf("Tenor Failed somewhere. %v", err)
-	err = s.InteractionRespond(
-		i.Interaction,
-		&discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Flags:   1 << 6,
-				Content: "Tenor could not be reached.",
-			},
-		},
-	)
-	if err != nil {
-		log.Errorf("discord failed to send error message: %v", err)
-	}
-}
-
 func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArgument) Handler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if len(queries) == 0 {
 			log.Errorf("No queries for command %s", i.Interaction.ID)
 			return
 		}
-		tt := time.After(2 * time.Second)
+		tt := time.NewTimer(1 * time.Second)
+		defer tt.Stop()
 
 		var mention string
 		if withUser {
@@ -182,33 +166,7 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 		}
 
 		c := make(chan string)
-		go func() {
-			q := Args(queries).Random()
-			log.Debugf("Using query %+v", q)
-			if q.Url != "" {
-				c <- q.Url
-				return
-			}
-
-			var gifs tenor.ResultList
-			var err error
-			if q.IsSearch {
-				gifs, err = tenor.Search(q.Query, tenor.WithLimit(1))
-			} else {
-				gifs, err = tenor.Random(q.Query, tenor.WithLimit(1))
-			}
-			if err != nil {
-				tenorError(s, i, err)
-				c <- ""
-				return
-			}
-			if len(gifs) == 0 {
-				log.Warnf("No gifs found for query %s", q.Query)
-				c <- ""
-				return
-			}
-			c <- gifs[0].URL
-		}()
+		go getGif(c, queries)
 
 		var err error
 		var sent bool
@@ -238,7 +196,7 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 					log.Errorf("discord failed to complete interaction message: %v", err)
 				}
 				return
-			case <-tt:
+			case <-tt.C:
 				sent = true
 				if withUser {
 					message = fmt.Sprintf(baseText, mention)
@@ -257,4 +215,32 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 			}
 		}
 	}
+}
+
+func getGif(c chan string, queries []*WeightedArgument) {
+	q := Args(queries).Random()
+	log.Debugf("Using query %+v", q)
+	if q.Url != "" {
+		c <- q.Url
+		return
+	}
+
+	var gifs tenor.ResultList
+	var err error
+	if q.IsSearch {
+		gifs, err = tenor.Search(q.Query, tenor.WithLimit(1))
+	} else {
+		gifs, err = tenor.Random(q.Query, tenor.WithLimit(1))
+	}
+	if err != nil {
+		log.Errorf("Tenor Failed somewhere. %v", err)
+		c <- ""
+		return
+	}
+	if len(gifs) == 0 {
+		log.Warnf("No gifs found for query %s", q.Query)
+		c <- ""
+		return
+	}
+	c <- gifs[0].URL
 }

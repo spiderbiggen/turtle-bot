@@ -31,7 +31,7 @@ func Search(query string, opts ...Opt) (ResultList, error) {
 }
 
 func Trending(opts ...Opt) (ResultList, error) {
-	return newQuery(search, "", opts...).request()
+	return newQuery(trending, "", opts...).request()
 }
 
 type Opt func(query *tenorQuery)
