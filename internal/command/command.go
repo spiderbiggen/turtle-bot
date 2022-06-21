@@ -23,6 +23,8 @@ type WeightedArgument struct {
 
 type Args []*WeightedArgument
 
+type User discordgo.User
+
 func (a Args) Random() *WeightedArgument {
 	switch len(a) {
 	case 0:
@@ -61,7 +63,10 @@ func Apex() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return apexCommand, gifCommand("Time for Apex\nLet's go %s", "Time for Apex\nLet's go %s\n%s", true, &WeightedArgument{Query: "Apex Legends"})
+	return apexCommand, gifCommand(
+		"Time for Apex\nLet's go %[1]s", "Time for Apex\nLet's go %[1]s\n%[2]s",
+		&WeightedArgument{Query: "Apex Legends"},
+	)
 }
 
 func Hurry() (*discordgo.ApplicationCommand, Handler) {
@@ -77,7 +82,18 @@ func Hurry() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return hurryCommand, gifCommand("Hurry up %s", "Hurry up %s\n%s", true, &WeightedArgument{Query: "hurry up"})
+	return hurryCommand, gifCommand(
+		"Hurry up %[1]s", "Hurry up %[1]s\n%[2]s",
+		&WeightedArgument{Query: "hurry up"},
+	)
+}
+
+func (u *User) mention() string {
+	if u == nil {
+		return "@here"
+	} else {
+		return fmt.Sprintf("<@%s>", u.ID)
+	}
 }
 
 func Play() (*discordgo.ApplicationCommand, Handler) {
@@ -93,7 +109,10 @@ func Play() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return playCommand, gifCommand("Let's go %s", "Let's go %s\n%s", true, &WeightedArgument{Query: "games"})
+	return playCommand, gifCommand(
+		"Let's go %[1]s", "Let's go %[1]s\n%[2]s",
+		&WeightedArgument{Query: "games"},
+	)
 }
 
 func Sleep() (*discordgo.ApplicationCommand, Handler) {
@@ -102,7 +121,7 @@ func Sleep() (*discordgo.ApplicationCommand, Handler) {
 		Description: "Gets a random good night gif",
 	}
 	return sleepCommand, gifCommand(
-		"Good Night!", "%s", false,
+		"Good Night!", "%[2]s",
 		&WeightedArgument{Query: "sleep", Weight: 80},
 		&WeightedArgument{Query: "night", Weight: 70},
 		&WeightedArgument{Query: "froggers", Weight: 1, GifCount: 1, IsSearch: true},
@@ -124,14 +143,14 @@ func Morbius() (*discordgo.ApplicationCommand, Handler) {
 		Description: "Morbius",
 	}
 	return sleepCommand, gifCommand(
-		"You got morbed", "%s", false,
+		"You got morbed", "%[2]s",
 		&WeightedArgument{Query: "Morbius"},
 		&WeightedArgument{Query: "Morbin"},
 	)
 }
 
 // userFromOptions looks for the first option with the "user" key unless another key is provided.
-func userFromOptions(s *discordgo.Session, i *discordgo.InteractionCreate, keys ...string) *discordgo.User {
+func userFromOptions(s *discordgo.Session, i *discordgo.InteractionCreate, keys ...string) *User {
 	key := "user"
 	if len(keys) > 0 {
 		key = keys[0]
@@ -140,30 +159,25 @@ func userFromOptions(s *discordgo.Session, i *discordgo.InteractionCreate, keys 
 	for _, option := range i.Interaction.ApplicationCommandData().Options {
 		if option.Name == key {
 			if user := option.UserValue(s); user != nil {
-				return user
+				return (*User)(user)
 			}
 		}
 	}
 	return nil
 }
 
-func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArgument) Handler {
+func gifCommand(baseText, gifText string, queries ...*WeightedArgument) Handler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if len(queries) == 0 {
 			log.Errorf("No queries for command %s", i.Interaction.ID)
 			return
 		}
 		tt := time.NewTimer(1 * time.Second)
+		timeOut := time.NewTimer(15 * time.Second)
 		defer tt.Stop()
+		defer timeOut.Stop()
 
-		var mention string
-		if withUser {
-			if user := userFromOptions(s, i); user != nil {
-				mention = fmt.Sprintf("<@%s>", user.ID)
-			} else {
-				mention = "@here"
-			}
-		}
+		mention := userFromOptions(s, i).mention()
 
 		c := make(chan string)
 		go getGif(c, queries)
@@ -177,11 +191,7 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 				if gif == "" {
 					return
 				}
-				if withUser {
-					message = fmt.Sprintf(gifText, mention, gif)
-				} else {
-					message = fmt.Sprintf(gifText, gif)
-				}
+				message = fmt.Sprintf(gifText, mention, gif)
 				if sent {
 					_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: message})
 				} else {
@@ -198,11 +208,7 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 				return
 			case <-tt.C:
 				sent = true
-				if withUser {
-					message = fmt.Sprintf(baseText, mention)
-				} else {
-					message = baseText
-				}
+				message = fmt.Sprintf(baseText, mention)
 				err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -212,6 +218,9 @@ func gifCommand(baseText, gifText string, withUser bool, queries ...*WeightedArg
 				if err != nil {
 					log.Errorf("discord failed to send interaction message: %v", err)
 				}
+			case <-timeOut.C:
+				log.Warnf("Failed to send gif response withing 15 seconds")
+				return
 			}
 		}
 	}
