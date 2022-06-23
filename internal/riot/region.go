@@ -33,6 +33,8 @@ const (
 	TR1
 )
 
+var Regions = [...]Region{NA1, EUW1, EUN1, BR1, JP1, KR, LA1, LA2, OC1, RU, TR1}
+
 var realms = map[Region]string{
 	BR1:  "br1",
 	EUN1: "eun1",
@@ -47,7 +49,26 @@ var realms = map[Region]string{
 	TR1:  "tr1",
 }
 
+var continents = map[Region]string{
+	BR1:  "americas",
+	EUN1: "europe",
+	EUW1: "europe",
+	JP1:  "asia",
+	KR:   "asia",
+	LA1:  "americas",
+	LA2:  "americas",
+	NA1:  "americas",
+	OC1:  "asia",
+	RU:   "europe",
+	TR1:  "europe",
+}
+
 func (r Region) Realm() (string, bool) {
 	realm, isValid := realms[r]
 	return realm, isValid
+}
+
+func (r Region) Continent() (string, bool) {
+	continent, isValid := continents[r]
+	return continent, isValid
 }
