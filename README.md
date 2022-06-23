@@ -1,2 +1,2 @@
-# weeb bot
+# Weeb bot
 Discord bot for a small discord server

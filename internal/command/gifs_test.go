@@ -36,7 +36,6 @@ func TestWeightedArgument(t *testing.T) {
 			results[i] = -1
 		}
 	}
-	//t.Logf("%+v", results)
 	avg := float64(sum) / float64(runs)
 	t.Logf("Avg: %.2f", avg)
 	if avg < weight-weight*tolerance || avg > weight+weight*tolerance {
