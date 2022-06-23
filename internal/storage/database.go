@@ -41,11 +41,13 @@ func (c *Client) Connection() (*sqlx.DB, error) {
 	if c.db == nil {
 		c.db, err = sqlx.Connect("postgres", fmt.Sprintf("user=%s dbname=%s password=%s host=%s port=%s sslmode=disable", c.Username, c.Database, c.Password, c.Host, c.Port))
 		if err != nil {
+			c.Enabled = false
 			return nil, err
 		}
 		return c.db, nil
 	}
 	if err := c.db.Ping(); err != nil {
+		c.Enabled = false
 		return nil, err
 	}
 	return c.db, nil
@@ -54,6 +56,7 @@ func (c *Client) Connection() (*sqlx.DB, error) {
 func (c *Client) Migrate() error {
 	db, err := c.Connection()
 	if err != nil {
+		c.Enabled = false
 		return err
 	}
 	err = migration.Up(context.Background(), db)
