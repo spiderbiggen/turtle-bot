@@ -23,12 +23,11 @@ var (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-	log.SetReportCaller(true)
+	rand.Seed(time.Now().Unix())
 	log.SetLevel(log.TraceLevel)
 
 	hostname, _ := os.Hostname()
-	log.Warnf("Starting Weeb Bot on %s", hostname)
+	log.Infof("Starting Weeb Bot on %s", hostname)
 
 	cron := cronLib.New()
 	defer cron.Stop()
@@ -39,7 +38,7 @@ func main() {
 	if err != nil {
 		log.Errorf("Error migrating database: %v", err)
 	} else {
-		log.Infoln("Finished migration")
+		log.Infof("Finished migration")
 	}
 
 	client := riot.New(os.Getenv("RIOT_KEY"))
@@ -62,7 +61,10 @@ func main() {
 	}
 	defer d.Close()
 
-	registerCommands(d, command.Sleep, command.Apex, command.Play, command.Hurry, command.Morbius, command.Morbin)
+	registerCommands(d,
+		command.Sleep, command.Apex, command.Play, command.Hurry, command.Morbius, command.Morbin,
+		command.RiotGroup(client, db),
+	)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -71,13 +73,32 @@ func main() {
 }
 
 func registerCommands(s *discordgo.Session, fs ...command.Factory) {
+	commands, err := s.ApplicationCommands(s.State.User.ID, "")
+	if err != nil {
+		return
+	}
 	var p []string
 	for _, f := range fs {
 		c, h := f()
-		v, err := s.ApplicationCommandCreate(s.State.User.ID, "", c)
-		if err != nil {
-			log.Errorf("Cannot create '%v' command: %v", c.Name, err)
-			continue
+		var v *discordgo.ApplicationCommand
+		for _, ac := range commands {
+			if ac.Name == c.Name && ac.Description == c.Description && len(ac.Options) == len(c.Options) {
+				same := true
+				for i, option := range ac.Options {
+					same = same && option == c.Options[i]
+				}
+				if same {
+					v = ac
+					break
+				}
+			}
+		}
+		if v == nil {
+			v, err = s.ApplicationCommandCreate(s.State.User.ID, "", c)
+			if err != nil {
+				log.Errorf("Cannot create '%v' command: %v", c.Name, err)
+				continue
+			}
 		}
 
 		commandHandlers[c.Name] = h

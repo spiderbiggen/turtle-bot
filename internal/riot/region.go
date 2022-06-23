@@ -33,6 +33,8 @@ const (
 	TR1
 )
 
+var Regions = [...]Region{NA1, EUW1, EUN1, BR1, JP1, KR, LA1, LA2, OC1, RU, TR1}
+
 var realms = map[Region]string{
 	BR1:  "br1",
 	EUN1: "eun1",

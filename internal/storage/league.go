@@ -28,8 +28,8 @@ func (s *summoner) toSummoner() *riot.Summoner {
 	}
 }
 
-func (s *summoner) fromSummoner(r *riot.Summoner) *summoner {
-	*s = summoner{
+func entityFromSummoner(r *riot.Summoner) *summoner {
+	return &summoner{
 		ID:            r.Id,
 		AccountId:     r.AccountId,
 		Puuid:         r.Puuid,
@@ -38,13 +38,14 @@ func (s *summoner) fromSummoner(r *riot.Summoner) *summoner {
 		ProfileIconId: r.ProfileIconId,
 		SummonerLevel: r.SummonerLevel,
 	}
-	return s
 }
 
-func (c *Client) InsertSummoners(ctx context.Context, summoners []*riot.Summoner) error {
-	if len(summoners) == 0 {
-		return nil
-	}
+type discordUserHasLeagueUser struct {
+	DiscordID string `db:"discord_id"`
+	LeagueID  string `db:"league_id"`
+}
+
+func (c *Client) InsertDiscordSummoner(ctx context.Context, userID string, riotSummoner *riot.Summoner) error {
 	conn, err := c.Connection()
 	if err != nil {
 		return err
@@ -66,14 +67,23 @@ func (c *Client) InsertSummoners(ctx context.Context, summoners []*riot.Summoner
 	if err != nil {
 		return err
 	}
-	e := &summoner{}
-	for _, s := range summoners {
-		_, err := stmt.ExecContext(ctx, e.fromSummoner(s))
-		if err != nil {
-			_ = tx.Rollback()
-			return err
-		}
+	if _, err = stmt.ExecContext(ctx, entityFromSummoner(riotSummoner)); err != nil {
+		_ = tx.Rollback()
+		return err
 	}
+	stmt, err = tx.PrepareNamed(`
+		INSERT INTO discord_user_has_league_user (discord_id, league_id)
+		VALUES (:discord_id, :league_id)
+		ON CONFLICT (discord_id) DO UPDATE SET league_id = :league_id
+	`)
+	if err != nil {
+		return err
+	}
+	if _, err = stmt.ExecContext(ctx, discordUserHasLeagueUser{DiscordID: userID, LeagueID: riotSummoner.Id}); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
 	err = tx.Commit()
 	if err != nil {
 		_ = tx.Rollback()
