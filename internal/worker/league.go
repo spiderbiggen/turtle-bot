@@ -13,8 +13,6 @@ var (
 	retrievedMatchSet = make(map[string]interface{})
 )
 
-const channelId = "843990289374511114"
-
 func MatchChecker(db *storage.Client, client *riot.Client) Worker {
 	return func(ctx context.Context, discord *discordgo.Session) {
 		summoners, err := db.GetSummoners(ctx)

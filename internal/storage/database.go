@@ -1,11 +1,13 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"os"
+	"weeb_bot/internal/storage/migration"
 )
 
 type Client struct {
@@ -21,42 +23,6 @@ type Client struct {
 var (
 	ErrNoConnection = errors.New("cannot connect to database")
 )
-
-var schema = `
-CREATE TABLE IF NOT EXISTS league_user (
-    id TEXT PRIMARY KEY,
-    account_id TEXT NOT NULL UNIQUE,
-    puuid TEXT NOT NULL UNIQUE,
-	summoner_name TEXT NOT NULL,
-	summoner_level INTEGER NOT NULL,
-	revision_date TIMESTAMP NOT NULL,
-	profile_icon_id INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS discord_user_has_league_user (
-  discord_id TEXT,
-  league_id TEXT,
-  PRIMARY KEY (discord_id, league_id),
-  FOREIGN KEY (league_id) REFERENCES league_user (id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS league_match (
-    id BIGINT PRIMARY KEY
-    
-);
-
-CREATE TABLE IF NOT EXISTS league_match_has_teams (
-    player_id TEXT PRIMARY KEY,
-    match_id BIGINT PRIMARY KEY,
-    team_id
-);
-
-CREATE TABLE IF NOT EXISTS league_match_has_players (
-    player_id TEXT PRIMARY KEY,
-    match_id BIGINT PRIMARY KEY,
-    team_id INT NOT NULL,
-);
-`
 
 var DefaultClient = &Client{
 	Username: os.Getenv("PG_USER"),
@@ -90,7 +56,7 @@ func (c *Client) Migrate() error {
 	if err != nil {
 		return err
 	}
-	_, err = db.Exec(schema)
+	err = migration.Up(context.Background(), db)
 	if err != nil {
 		c.Enabled = false
 		return err

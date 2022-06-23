@@ -21,11 +21,13 @@ type Match struct {
 	Metadata *Metadata `json:"metadata"`
 	Info     *Info     `json:"info"`
 }
+
 type Metadata struct {
 	DataVersion  string   `json:"dataVersion"`
 	MatchID      string   `json:"matchId"`
 	Participants []string `json:"participants"`
 }
+
 type Challenges struct {
 	One2AssistStreakCount                     int     `json:"12AssistStreakCount"`
 	AbilityUses                               int     `json:"abilityUses"`
@@ -165,7 +167,7 @@ type Perks struct {
 	} `json:"styles"`
 }
 
-type Participants struct {
+type Participant struct {
 	Assists                        int         `json:"assists"`
 	BaronKills                     int         `json:"baronKills"`
 	BountyLevel                    int         `json:"bountyLevel"`
@@ -297,21 +299,21 @@ type Teams struct {
 	Win        bool        `json:"win"`
 }
 type Info struct {
-	GameCreation       int64           `json:"gameCreation"`
-	GameDuration       int             `json:"gameDuration"`
-	GameEndTimestamp   int64           `json:"gameEndTimestamp"`
-	GameID             int64           `json:"gameId"`
-	GameMode           string          `json:"gameMode"`
-	GameName           string          `json:"gameName"`
-	GameStartTimestamp int64           `json:"gameStartTimestamp"`
-	GameType           string          `json:"gameType"`
-	GameVersion        string          `json:"gameVersion"`
-	MapID              int             `json:"mapId"`
-	Participants       []*Participants `json:"participants"`
-	PlatformID         string          `json:"platformId"`
-	QueueID            int             `json:"queueId"`
-	Teams              []*Teams        `json:"teams"`
-	TournamentCode     string          `json:"tournamentCode"`
+	GameCreation       int64          `json:"gameCreation"`
+	GameDuration       int            `json:"gameDuration"`
+	GameEndTimestamp   int64          `json:"gameEndTimestamp"`
+	GameID             int64          `json:"gameId"`
+	GameMode           string         `json:"gameMode"`
+	GameName           string         `json:"gameName"`
+	GameStartTimestamp int64          `json:"gameStartTimestamp"`
+	GameType           string         `json:"gameType"`
+	GameVersion        string         `json:"gameVersion"`
+	MapID              int            `json:"mapId"`
+	Participants       []*Participant `json:"participants"`
+	PlatformID         string         `json:"platformId"`
+	QueueID            int            `json:"queueId"`
+	Teams              []*Teams       `json:"teams"`
+	TournamentCode     string         `json:"tournamentCode"`
 }
 
 func (c *Client) MatchIds(ctx context.Context, region Region, puuid string, options *MatchIdsOptions) ([]string, error) {
