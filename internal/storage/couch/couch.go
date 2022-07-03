@@ -44,7 +44,7 @@ func (c *Client) Connection() (*kivik.Client, error) {
 			log.Errorf("Failed to connect to couchdb: %v", err)
 			return nil, storage.ErrNoConnection
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 		defer cancel()
 		_, err = client.Ping(ctx)
 		if err != nil {
