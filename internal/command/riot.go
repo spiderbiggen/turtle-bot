@@ -7,10 +7,10 @@ import (
 	"golang.org/x/net/context"
 	"time"
 	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage"
+	"weeb_bot/internal/storage/postgres"
 )
 
-func RiotGroup(api *riot.Client, store *storage.Client) Factory {
+func RiotGroup(api *riot.Client, store *postgres.Client) Factory {
 	return func() (*discordgo.ApplicationCommand, Handler) {
 		var regionOptions []*discordgo.ApplicationCommandOptionChoice
 		for _, region := range riot.Regions {
@@ -72,7 +72,7 @@ func RiotGroup(api *riot.Client, store *storage.Client) Factory {
 	}
 }
 
-func linkHandler(s *discordgo.Session, i *discordgo.InteractionCreate, api *riot.Client, store *storage.Client) {
+func linkHandler(s *discordgo.Session, i *discordgo.InteractionCreate, api *riot.Client, store *postgres.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 

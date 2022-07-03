@@ -13,7 +13,8 @@ import (
 	"time"
 	"weeb_bot/internal/command"
 	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage"
+	"weeb_bot/internal/storage/couch"
+	"weeb_bot/internal/storage/postgres"
 	"weeb_bot/internal/worker"
 )
 
@@ -33,13 +34,22 @@ func main() {
 	defer cron.Stop()
 
 	log.Infoln("Migrating database...")
-	db := storage.DefaultClient
+	db := postgres.New()
 	err := db.Migrate()
 	if err != nil {
 		log.Errorf("Error migrating database: %v", err)
 	} else {
 		log.Infof("Finished migration")
 	}
+	couchdb := couch.New()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		err = couchdb.Init(ctx)
+		if err != nil {
+			log.Errorf("Error initializing database: %v", err)
+		}
+	}()
 
 	client := riot.New(os.Getenv("RIOT_KEY"))
 
@@ -47,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, client))
+	d.AddHandler(readyHandler(cron, db, couchdb, client))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
 			h(s, i)
@@ -61,11 +71,6 @@ func main() {
 	}
 	defer d.Close()
 
-	registerCommands(d,
-		command.Sleep, command.Apex, command.Play, command.Hurry, command.Morbius, command.Morbin,
-		command.RiotGroup(client, db),
-	)
-
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	<-stop
@@ -73,8 +78,14 @@ func main() {
 }
 
 func registerCommands(s *discordgo.Session, fs ...command.Factory) {
-	commands, err := s.ApplicationCommands(s.State.User.ID, "")
+	if s.State == nil || s.State.User == nil {
+		log.Error("Missing user ID in session. Cannot register commands")
+		return
+	}
+	id := s.State.User.ID
+	commands, err := s.ApplicationCommands(id, "")
 	if err != nil {
+		log.Errorf("Failed to fetch current commands. %v", err)
 		return
 	}
 	var p []string
@@ -94,7 +105,7 @@ func registerCommands(s *discordgo.Session, fs ...command.Factory) {
 			}
 		}
 		if v == nil {
-			v, err = s.ApplicationCommandCreate(s.State.User.ID, "", c)
+			v, err = s.ApplicationCommandCreate(id, "", c)
 			if err != nil {
 				log.Errorf("Cannot create '%v' command: %v", c.Name, err)
 				continue
@@ -108,8 +119,15 @@ func registerCommands(s *discordgo.Session, fs ...command.Factory) {
 	log.Infof("Started bot with registered commands: %s.", strings.Join(p, ", "))
 }
 
-func readyHandler(cron *cronLib.Cron, db *storage.Client, client *riot.Client) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
+		// Register commands if discord is ready
+		registerCommands(s,
+			command.Sleep, command.Apex, command.Play, command.Hurry,
+			command.Morbius, command.Morbin, command.Morb,
+			command.RiotGroup(client, db),
+		)
+
 		var err error
 		nyaa := worker.NyaaCheck()
 		_, err = cron.AddFunc("*/10 * * * *", func() {
@@ -121,15 +139,17 @@ func readyHandler(cron *cronLib.Cron, db *storage.Client, client *riot.Client) f
 			log.Fatalln(err)
 		}
 		if db.Enabled {
-			rito := worker.MatchChecker(db, client)
-			_, err = cron.AddFunc("*/1 * * * *", func() {
-				timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
+			rito := worker.MatchChecker(db, couch, client)
+			cmd := func() {
+				timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
 				defer cancelFunc()
 				rito(timeout, s)
-			})
+			}
+			_, err = cron.AddFunc("*/5 * * * *", cmd)
 			if err != nil {
 				log.Fatalln(err)
 			}
+			cmd()
 		}
 		cron.Start()
 	}

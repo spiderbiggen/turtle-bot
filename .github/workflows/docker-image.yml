@@ -14,8 +14,8 @@ on:
 env:
   # Use docker.io for Docker Hub if empty
   REGISTRY: ghcr.io
-  # github.repository as <account>/<repo>
-  IMAGE_NAME: ${{ github.repository }}
+  # github.postgres as <account>/<repo>
+  IMAGE_NAME: ${{ github.postgres }}
 
 
 jobs:
@@ -57,7 +57,7 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout repository
+      - name: Checkout postgres
         uses: actions/checkout@v2
 
       # Install the cosign tool except on PR
@@ -113,7 +113,7 @@ jobs:
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
-      # repository is public to avoid leaking database.  If you would like to publish
+      # postgres is public to avoid leaking database.  If you would like to publish
       # transparency database even for private images, pass --force to cosign below.
       # https://github.com/sigstore/cosign
       - name: Sign the published Docker image
