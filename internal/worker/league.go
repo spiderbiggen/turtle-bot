@@ -4,56 +4,93 @@ import (
 	"context"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
+	"sort"
 	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage"
+	couch2 "weeb_bot/internal/storage/couch"
+	postgres2 "weeb_bot/internal/storage/postgres"
 )
 
-var (
-	matchSet          = make(map[string]interface{})
-	retrievedMatchSet = make(map[string]interface{})
-)
+type LeagueWorker struct {
+	db    *postgres2.Client
+	couch *couch2.Client
+	*riot.Client
+}
 
-func MatchChecker(db *storage.Client, client *riot.Client) Worker {
+func MatchChecker(db *postgres2.Client, couch *couch2.Client, client *riot.Client) Worker {
+	worker := LeagueWorker{
+		db:     db,
+		couch:  couch,
+		Client: client,
+	}
 	return func(ctx context.Context, discord *discordgo.Session) {
-		summoners, err := db.GetSummoners(ctx)
+		summoners, err := worker.db.GetSummoners(ctx)
 		if err != nil {
 			log.Errorf("Failed to get summoners from db: %v", err)
 			return
 		}
-		downloadMatches(ctx, client, summoners)
+		worker.downloadMatches(ctx, summoners)
 	}
 }
 
-func downloadMatches(ctx context.Context, client *riot.Client, summoners []*riot.Summoner) {
-	if len(summoners) == 0 {
+func (w *LeagueWorker) downloadMatches(ctx context.Context, summoners []*riot.Summoner) {
+	c := len(summoners)
+	if c == 0 {
 		return
 	}
-	for _, summoner := range summoners {
-		ids, err := client.MatchIds(ctx, riot.EUW1, summoner.Puuid, &riot.MatchIdsOptions{Count: 100})
-		if err != nil {
-			log.Warnf("Failed to get match info for %v", summoner)
-		} else {
-			for _, id := range ids {
-				matchSet[id] = nil
-			}
-		}
+
+	ids, err := w.lastMatchesForSummoners(ctx, summoners)
+	if err != nil {
+		log.Errorf("Failed to get match ids for summoners: %v", err)
+		return
 	}
-	r := make([]string, 0, 10)
-	for id := range matchSet {
-		if _, ok := retrievedMatchSet[id]; !ok {
-			r = append(r, id)
-		}
-		if len(r) == 10 {
-			break
-		}
+	iSize := len(ids)
+	if iSize == 0 {
+		log.Debug("No matchIds for summoners")
+		return
 	}
-	// TODO get batch matches
+
+	l := 10
+	if l > iSize {
+		l = iSize
+	}
+	dst := make([]string, l)
+	copy(dst, ids[:l])
+	w.getMatches(ctx, dst)
 }
 
-func updateSummoners(ctx context.Context, client *riot.Client, summoners []*riot.Summoner) []*riot.Summoner {
+func (w *LeagueWorker) lastMatchesForSummoners(ctx context.Context, summoners []*riot.Summoner) ([]string, error) {
+	c := len(summoners)
+	if c == 0 {
+		return nil, nil
+	}
+
+	matchSet := make(map[string]interface{})
+
+	for _, summoner := range summoners {
+		ids, err := w.MatchIds(ctx, riot.EUW1, summoner.Puuid, &riot.MatchIdsOptions{Count: 100})
+		if err != nil {
+			log.Warnf("Failed to get match info for %v", summoner)
+			continue
+		}
+
+		for _, id := range ids {
+			matchSet[id] = nil
+		}
+	}
+	r := make([]string, 0, len(matchSet))
+	for id := range matchSet {
+		r = append(r, id)
+	}
+	// sort list from old to new
+	sort.Strings(r)
+
+	return w.couch.FilterMatchIds(ctx, r)
+}
+
+func (w *LeagueWorker) updateSummoners(ctx context.Context, summoners []*riot.Summoner) []*riot.Summoner {
 	r := make([]*riot.Summoner, 0, len(summoners))
 	for _, summoner := range summoners {
-		s, err := client.SummonerByPuuid(ctx, riot.EUW1, summoner.Puuid)
+		s, err := w.SummonerByPuuid(ctx, riot.EUW1, summoner.Puuid)
 		if err != nil {
 			log.Warnf("Failed to update summoner info for %v", summoner)
 		} else {
@@ -63,9 +100,19 @@ func updateSummoners(ctx context.Context, client *riot.Client, summoners []*riot
 	return r
 }
 
-func getMatches(ctx context.Context, c *riot.Client, summoners []*riot.Summoner) {
-	if len(summoners) == 0 {
+func (w *LeagueWorker) getMatches(ctx context.Context, matchIds []string) {
+	if len(matchIds) == 0 {
 		return
 	}
 
+	for _, id := range matchIds {
+		match, err := w.Match(ctx, riot.EUW1, id)
+		if err != nil {
+			return
+		}
+		err = w.couch.AddMatch(ctx, match)
+		if err != nil {
+			log.Warnf("Failed to add match to database: %v", err)
+		}
+	}
 }
