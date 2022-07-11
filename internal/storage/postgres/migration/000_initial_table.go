@@ -6,16 +6,16 @@ import (
 )
 
 func init() {
-	Register(&InitialTable001{})
+	Register(&InitialTable000{})
 }
 
-type InitialTable001 struct{}
+type InitialTable000 struct{}
 
-func (t *InitialTable001) Index() int { return 0 }
+func (t *InitialTable000) Index() int { return 0 }
 
-func (t *InitialTable001) Name() string { return "initial migration" }
+func (t *InitialTable000) Name() string { return "initial migration" }
 
-func (t *InitialTable001) Up(ctx context.Context, tx *sqlx.Tx) error {
+func (t *InitialTable000) Up(ctx context.Context, tx *sqlx.Tx) error {
 	sql := `
 CREATE TABLE league_user (
     id TEXT PRIMARY KEY,
@@ -36,7 +36,7 @@ CREATE TABLE discord_user_has_league_user (
 	return err
 }
 
-func (t *InitialTable001) Down(ctx context.Context, tx *sqlx.Tx) error {
+func (t *InitialTable000) Down(ctx context.Context, tx *sqlx.Tx) error {
 	sql := `
 DROP TABLE league_user;
 DROP TABLE discord_user_has_league_user;`

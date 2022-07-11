@@ -44,8 +44,10 @@ func (a Args) Random() *WeightedArgument {
 	return a[len(a)-1]
 }
 
-func Apex() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
+type Apex struct{}
+
+func (a *Apex) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
 		Name:        "apex",
 		Description: "Drops an apex gif with someones name",
 		Options: []*discordgo.ApplicationCommandOption{
@@ -57,13 +59,24 @@ func Apex() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return cmd, gifCommand("Time for Apex\nLet's go %[1]s\n%[2]s",
-		&WeightedArgument{Query: "Apex Legends"},
-	)
 }
 
-func Hurry() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
+func (a *Apex) InteractionID() string { return "apex" }
+
+func (a *Apex) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand("Time for Apex\nLet's go %[1]s\n%[2]s",
+		&WeightedArgument{Query: "Apex Legends"},
+	)(s, i)
+}
+
+type Hurry struct{}
+
+func (h *Hurry) InteractionID() string {
+	return "hurry"
+}
+
+func (h *Hurry) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
 		Name:        "hurry",
 		Description: "Hurry up",
 		Options: []*discordgo.ApplicationCommandOption{
@@ -75,21 +88,22 @@ func Hurry() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return cmd, gifCommand("Hurry up %[1]s\n%[2]s",
+}
+
+func (h *Hurry) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand("Hurry up %[1]s\n%[2]s",
 		&WeightedArgument{Query: "hurry up"},
-	)
+	)(s, i)
 }
 
-func (u *User) mention() string {
-	if u == nil {
-		return "@here"
-	} else {
-		return fmt.Sprintf("<@%s>", u.ID)
-	}
+type Play struct{}
+
+func (p *Play) InteractionID() string {
+	return "play"
 }
 
-func Play() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
+func (p *Play) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
 		Name:        "play",
 		Description: "Tag the channel or someone to come play some games",
 		Options: []*discordgo.ApplicationCommandOption{
@@ -101,51 +115,60 @@ func Play() (*discordgo.ApplicationCommand, Handler) {
 			},
 		},
 	}
-	return cmd, gifCommand("Let's go %[1]s\n%[2]s",
-		&WeightedArgument{Query: "games"},
-	)
 }
 
-func Sleep() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
+func (p *Play) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand("Let's go %[1]s\n%[2]s",
+		&WeightedArgument{Query: "games"},
+	)(s, i)
+}
+
+type Sleep struct{}
+
+func (c *Sleep) InteractionID() string {
+	return "sleep"
+}
+
+func (c *Sleep) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
 		Name:        "sleep",
 		Description: "Gets a random good night gif",
 	}
-	return cmd, gifCommand("%[2]s",
+}
+
+func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand("%[2]c",
 		&WeightedArgument{Query: "sleep", Weight: 80},
 		&WeightedArgument{Query: "night", Weight: 70},
 		&WeightedArgument{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624", Weight: 1},
-	)
+	)(s, i)
 }
 
-func Morb() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
+type Morb struct{}
+
+func (c *Morb) InteractionID() string { return "morb" }
+
+func (c *Morb) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
 		Name:        "morb",
-		Description: "Morb",
+		Description: "It's morbin time",
 	}
-	_, c := Morbius()
-	return cmd, c
 }
 
-func Morbin() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
-		Name:        "morbin",
-		Description: "Morbin",
-	}
-	_, c := Morbius()
-	return cmd, c
-}
-
-func Morbius() (*discordgo.ApplicationCommand, Handler) {
-	var cmd = &discordgo.ApplicationCommand{
-		Name:        "morbius",
-		Description: "Morbius",
-	}
-	return cmd, gifCommand("%[2]s",
+func (c *Morb) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand("%[2]s",
 		&WeightedArgument{Query: "Morbius"},
 		&WeightedArgument{Query: "Morbin"},
 		&WeightedArgument{Query: "Morb"},
-	)
+	)(s, i)
+}
+
+func (u *User) mention() string {
+	if u == nil {
+		return "@here"
+	} else {
+		return fmt.Sprintf("<@%s>", u.ID)
+	}
 }
 
 func gifCommand(gifText string, queries ...*WeightedArgument) Handler {

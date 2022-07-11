@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"weeb_bot/internal/command"
+	kitsuApi "weeb_bot/internal/kitsu"
 	"weeb_bot/internal/riot"
 	"weeb_bot/internal/storage/couch"
 	"weeb_bot/internal/storage/postgres"
@@ -20,6 +21,7 @@ import (
 
 var (
 	commandHandlers    = make(map[string]command.Handler)
+	componentHandlers  = make(map[string]command.Handler)
 	registeredCommands []*discordgo.ApplicationCommand
 )
 
@@ -50,6 +52,7 @@ func main() {
 			log.Errorf("Error initializing database: %v", err)
 		}
 	}()
+	kitsu := kitsuApi.New()
 
 	client := riot.New(os.Getenv("RIOT_KEY"))
 
@@ -57,10 +60,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, couchdb, client))
+	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
-		if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
-			h(s, i)
+		switch i.Type {
+		case discordgo.InteractionApplicationCommand:
+			if h, ok := commandHandlers[i.ApplicationCommandData().Name]; ok {
+				h(s, i)
+			}
+		case discordgo.InteractionMessageComponent:
+			if h, ok := componentHandlers[i.MessageComponentData().CustomID]; ok {
+				h(s, i)
+			}
 		}
 	})
 
@@ -77,7 +87,7 @@ func main() {
 	log.Println("Gracefully shutting down")
 }
 
-func registerCommands(s *discordgo.Session, fs ...command.Factory) {
+func registerCommands(s *discordgo.Session, fs ...command.InteractionHandler) {
 	if s.State == nil || s.State.User == nil {
 		log.Error("Missing user ID in session. Cannot register commands")
 		return
@@ -90,46 +100,78 @@ func registerCommands(s *discordgo.Session, fs ...command.Factory) {
 	}
 	var p []string
 	for _, f := range fs {
-		c, h := f()
+		if f == nil {
+			continue
+		}
+		//cmd, h, c := f()
+		cmd := f.Command()
 		var v *discordgo.ApplicationCommand
 		for _, ac := range commands {
-			if ac.Name == c.Name && ac.Description == c.Description && len(ac.Options) == len(c.Options) {
-				same := true
+			if ac.Name == cmd.Name && ac.Description == cmd.Description && len(ac.Options) == len(cmd.Options) {
+				eq := true
 				for i, option := range ac.Options {
-					same = same && option == c.Options[i]
+					eq = eq && option == cmd.Options[i]
 				}
-				if same {
+				if eq {
 					v = ac
 					break
 				}
 			}
 		}
 		if v == nil {
-			v, err = s.ApplicationCommandCreate(id, "", c)
+			v, err = s.ApplicationCommandCreate(id, "", cmd)
 			if err != nil {
-				log.Errorf("Cannot create '%v' command: %v", c.Name, err)
+				log.Errorf("Cannot create '%v' command: %v", cmd.Name, err)
 				continue
 			}
 		}
 
-		commandHandlers[c.Name] = h
+		commandHandlers[f.InteractionID()] = f.HandleInteraction
+		if v, ok := f.(command.ComponentHandler); ok {
+			componentHandlers[v.ComponentID()] = v.HandleComponent
+		}
 		registeredCommands = append(registeredCommands, v)
-		p = append(p, c.Name)
+		p = append(p, cmd.Name)
 	}
-	log.Infof("Started bot with registered commands: %s.", strings.Join(p, ", "))
+
+	go func() {
+		rem := filterRegisteredCommands(commands, p)
+		for _, ac := range rem {
+			if err := s.ApplicationCommandDelete(id, "", ac.ID); err != nil {
+				log.Warnf("Failed to delete command: %v", err)
+			}
+		}
+	}()
+
+	log.Infof("Started bot with registered commands: %s", strings.Join(p, ", "))
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client) func(s *discordgo.Session, i *discordgo.Ready) {
+func filterRegisteredCommands(commands []*discordgo.ApplicationCommand, registeredCommands []string) []*discordgo.ApplicationCommand {
+	var r []*discordgo.ApplicationCommand
+o:
+	for _, ac := range commands {
+		for _, c := range registeredCommands {
+			if ac.Name == c {
+				continue o
+			}
+		}
+		r = append(r, ac)
+	}
+	return r
+}
+
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
-			command.Sleep, command.Apex, command.Play, command.Hurry,
-			command.Morbius, command.Morbin, command.Morb,
+			&command.Apex{}, &command.Play{}, &command.Hurry{},
+			&command.Morb{}, &command.Sleep{},
 			command.RiotGroup(client, db),
+			command.AnimeGroup(kitsu, db),
 		)
 
 		var err error
-		nyaa := worker.NyaaCheck()
+		nyaa := worker.NyaaCheck(db, kitsu)
 		_, err = cron.AddFunc("*/10 * * * *", func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancelFunc()
@@ -149,7 +191,6 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 			if err != nil {
 				log.Fatalln(err)
 			}
-			cmd()
 		}
 		cron.Start()
 	}

@@ -4,7 +4,20 @@ import "github.com/bwmarrin/discordgo"
 
 type Handler func(s *discordgo.Session, i *discordgo.InteractionCreate)
 
-type Factory func() (*discordgo.ApplicationCommand, Handler)
+type InteractionHandler interface {
+	InteractionID() string
+	Command() *discordgo.ApplicationCommand
+	HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate)
+}
+
+type ComponentProvider interface {
+	Components() []ComponentHandler
+}
+
+type ComponentHandler interface {
+	ComponentID() string
+	HandleComponent(s *discordgo.Session, i *discordgo.InteractionCreate)
+}
 
 type User discordgo.User
 
