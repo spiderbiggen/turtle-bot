@@ -16,7 +16,7 @@ type summoner struct {
 	SummonerLevel int       `db:"summoner_level"`
 }
 
-func (s *summoner) toSummoner() *riot.Summoner {
+func entityToSummoner(s summoner) *riot.Summoner {
 	return &riot.Summoner{
 		Id:            s.ID,
 		AccountId:     s.AccountId,
@@ -103,7 +103,7 @@ func (c *Client) GetSummoners(ctx context.Context) ([]*riot.Summoner, error) {
 	}
 	r := make([]*riot.Summoner, len(s))
 	for i, s2 := range s {
-		r[i] = s2.toSummoner()
+		r[i] = entityToSummoner(s2)
 	}
 	return r, nil
 }

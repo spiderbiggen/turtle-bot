@@ -3,11 +3,15 @@ package kitsu
 import (
 	"context"
 	"encoding/json"
-	log "github.com/sirupsen/logrus"
-	"io"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"time"
+)
+
+var (
+	ErrHttpError = errors.New("http error")
 )
 
 const (
@@ -40,10 +44,10 @@ type animeCollectionResult struct {
 	Data []*struct {
 		ID         string `json:"id,omitempty"`
 		Attributes struct {
-			CreatedAt      *time.Time `json:"created_at,omitempty"`
-			UpdatedAt      *time.Time `json:"updated_at,omitempty"`
+			CreatedAt      *time.Time `json:"createdAt,omitempty"`
+			UpdatedAt      *time.Time `json:"updatedAt,omitempty"`
 			Slug           string     `json:"slug,omitempty"`
-			CanonicalTitle string     `json:"canonical_title,omitempty"`
+			CanonicalTitle string     `json:"canonicalTitle,omitempty"`
 			Synopsis       string     `json:"synopsis,omitempty"`
 			Description    string     `json:"description,omitempty"`
 			Cover          *ImageSet  `json:"coverImage,omitempty"`
@@ -60,23 +64,23 @@ type animeCollectionResult struct {
 	} `json:"links"`
 }
 
-type Kitsu struct {
+type Client struct {
 	Client *http.Client
 }
 
-func New() Kitsu {
-	return Kitsu{
+func New() *Client {
+	return &Client{
 		Client: http.DefaultClient,
 	}
 }
 
-func (k *Kitsu) doRequest(req *http.Request) (*http.Response, error) {
+func (k *Client) doRequest(req *http.Request) (*http.Response, error) {
 	req.Header.Set(acceptHeader, jsonApiType)
 	req.Header.Set(contentTypeHeader, jsonApiType)
 	return k.Client.Do(req)
 }
 
-func (k *Kitsu) SearchAnime(ctx context.Context, title string) ([]*Anime, error) {
+func (k *Client) SearchAnime(ctx context.Context, title string) ([]*Anime, error) {
 	u, err := url.Parse("https://kitsu.io/api/edge/anime")
 	if err != nil {
 		return nil, err
@@ -99,12 +103,10 @@ func (k *Kitsu) SearchAnime(ctx context.Context, title string) ([]*Anime, error)
 	if err != nil {
 		return nil, err
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			log.Warnf("Failed to close body. %v", err)
-		}
-	}(resp.Body)
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, fmt.Errorf("%w, invalid status code: %d", ErrHttpError, resp.StatusCode)
+	}
 
 	var result animeCollectionResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

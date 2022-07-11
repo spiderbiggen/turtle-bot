@@ -7,85 +7,68 @@ import (
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
-	"weeb_bot/internal/kitsu"
+	kitsuApi "weeb_bot/internal/kitsu"
 	"weeb_bot/internal/nyaa"
+	"weeb_bot/internal/storage/postgres"
 )
 
-type GuildId string
-type ChannelId string
+type nyaaWorker struct {
+	db        *postgres.Client
+	kitsu     *kitsuApi.Client
+	lastCheck time.Time
+}
 
-func NyaaCheck() Worker {
-	var lastNyaaCheck = time.Now()
-	return func(ctx context.Context, discord *discordgo.Session) {
+func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client) Worker {
+	w := nyaaWorker{db: db, kitsu: kitsu, lastCheck: time.Now()}
+	return func(ctx context.Context, s *discordgo.Session) {
 		checkTime := time.Now()
 		episodes, err := nyaa.Episodes(ctx)
 		if err != nil {
-			log.Fatal(err)
+			log.Errorf("Failed to get episodes from nyaa: %v", err)
+			return
 		}
-		c := map[GuildId]ChannelId{
-			"825808364649971712": "825808364649971715",
-		}
-		a := map[string][]GuildId{
-			"Paripi Koumei":                  {"825808364649971712"},
-			"Tate no Yuusha no Nariagari S2": {"825808364649971712"},
-			"Spy x Family":                   {"825808364649971712"},
-			"Gaikotsu Kishi-sama, Tadaima Isekai e Odekakechuu": {"825808364649971712"},
-		}
+
 		wg := sync.WaitGroup{}
 		for _, group := range episodes {
-			if group.FirstPublishedDate.Before(lastNyaaCheck) {
+			if group.FirstPublishedDate.Before(w.lastCheck) {
 				continue
 			}
 			wg.Add(1)
-			go func(ctx context.Context, group nyaa.Group, wg *sync.WaitGroup) {
-				defer wg.Done()
-				var embed *discordgo.MessageEmbed
-				if guilds, ok := a[group.AnimeTitle]; ok {
-					for _, guild := range guilds {
-						if channel, ok := c[guild]; ok {
-							if embed == nil {
-								embed = makeEmbed(ctx, group)
-							}
-							_, err := discord.ChannelMessageSendEmbed(string(channel), embed)
-							if err != nil {
-								log.Errorln(err)
-							}
-						}
-					}
-				}
-			}(ctx, group, &wg)
+			go w.sendToGuilds(ctx, s, group, &wg)
 		}
 		wg.Wait()
-		lastNyaaCheck = checkTime
+		w.lastCheck = checkTime
 	}
 }
 
-func coverImage(i ...*kitsu.ImageSet) string {
-	for _, imageSet := range i {
-		if imageSet == nil {
-			continue
+func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, group nyaa.Group, wg *sync.WaitGroup) {
+	defer wg.Done()
+	var embed *discordgo.MessageEmbed
+	aSubs, err := w.db.GetSubscriptions(ctx, group.AnimeTitle)
+	if err != nil {
+		log.Warnf("Failed to get subscriptions: %v", err)
+		return
+	}
+	for _, sub := range aSubs.Subs {
+		if embed == nil {
+			embed = w.makeEmbed(group, aSubs.Anime)
 		}
-		if imageSet.Medium != nil {
-			return *imageSet.Medium
-		} else {
-			return imageSet.Original
+		_, err := s.ChannelMessageSendEmbed(sub.ChannelID, embed)
+		if err != nil {
+			log.Errorf("Failed to send download embed: %v", err)
 		}
 	}
-	return ""
 }
 
-func makeEmbed(ctx context.Context, g nyaa.Group) *discordgo.MessageEmbed {
-	title := g.AnimeTitle
+func (w *nyaaWorker) makeEmbed(g nyaa.Group, anime *postgres.Anime) *discordgo.MessageEmbed {
+	title := anime.CanonicalTitle
 	if g.Episode.Number != 0 {
 		title = fmt.Sprintf("%s Ep %d", g.AnimeTitle, g.Episode.Number)
 	}
 
-	k := kitsu.New()
 	var image *discordgo.MessageEmbedImage
-	if r, _ := k.SearchAnime(ctx, g.AnimeTitle); len(r) > 0 {
-		if imageUrl := coverImage(r[0].Cover, r[0].Poster); imageUrl != "" {
-			image = &discordgo.MessageEmbedImage{URL: imageUrl}
-		}
+	if anime.ImageURL != "" {
+		image = &discordgo.MessageEmbedImage{URL: anime.ImageURL}
 	}
 
 	fields := make([]*discordgo.MessageEmbedField, 0, len(g.Downloads))
