@@ -55,8 +55,6 @@ func (c *Client) FilterMatchIds(ctx context.Context, ids []string) ([]string, er
 			r = append(r, id)
 		}
 	}
-	log.Printf("%v", storedIds)
-	log.Printf("%v", r)
 
 	return r, nil
 }
