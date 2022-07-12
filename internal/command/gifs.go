@@ -137,7 +137,7 @@ func (c *Sleep) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand("%[2]c",
+	gifCommand("%[2]s",
 		&WeightedArgument{Query: "sleep", Weight: 80},
 		&WeightedArgument{Query: "night", Weight: 70},
 		&WeightedArgument{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624", Weight: 1},
