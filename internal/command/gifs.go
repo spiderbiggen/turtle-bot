@@ -19,7 +19,7 @@ type WeightedArgument struct {
 
 type Args []*WeightedArgument
 
-func (a Args) Random() *WeightedArgument {
+func (a Args) Pick() *WeightedArgument {
 	switch len(a) {
 	case 0:
 		return nil
@@ -196,24 +196,24 @@ func gifCommand(gifText string, queries ...*WeightedArgument) Handler {
 		select {
 		case gif := <-c:
 			if gif == "" {
-				s.InteractionResponseDelete(i.Interaction)
+				_ = s.InteractionResponseDelete(i.Interaction)
 				return
 			}
 			message = fmt.Sprintf(gifText, mention, gif)
 			_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: message})
 			if err != nil {
 				log.Errorf("discord failed to complete interaction message: %v", err)
-				s.InteractionResponseDelete(i.Interaction)
+				_ = s.InteractionResponseDelete(i.Interaction)
 			}
 		case <-timeOut.C:
-			s.InteractionResponseDelete(i.Interaction)
+			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Warnf("Failed to send gif response within 15 seconds")
 		}
 	}
 }
 
 func getGif(c chan string, queries []*WeightedArgument) {
-	q := Args(queries).Random()
+	q := Args(queries).Pick()
 	log.Debugf("Using query %+v", q)
 	if q.Url != "" {
 		c <- q.Url

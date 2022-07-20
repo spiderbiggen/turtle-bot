@@ -13,6 +13,7 @@ import (
 	"time"
 	"weeb_bot/internal/command"
 	kitsuApi "weeb_bot/internal/kitsu"
+	nyaaApi "weeb_bot/internal/nyaa"
 	"weeb_bot/internal/riot"
 	"weeb_bot/internal/storage/couch"
 	"weeb_bot/internal/storage/postgres"
@@ -53,6 +54,7 @@ func main() {
 		}
 	}()
 	kitsu := kitsuApi.New()
+	nyaa := nyaaApi.New()
 
 	client := riot.New(os.Getenv("RIOT_KEY"))
 
@@ -60,7 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu))
+	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu, nyaa))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -160,7 +162,7 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
@@ -171,7 +173,7 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 		)
 
 		var err error
-		nyaa := worker.NyaaCheck(db, kitsu)
+		nyaa := worker.NyaaCheck(db, kitsu, nyaa)
 		_, err = cron.AddFunc("*/10 * * * *", func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancelFunc()
