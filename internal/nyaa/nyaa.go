@@ -3,18 +3,10 @@ package nyaa
 import (
 	"context"
 	"fmt"
-	"github.com/mmcdole/gofeed"
 	log "github.com/sirupsen/logrus"
+	"net/http"
 	"net/url"
-	"regexp"
-	"strconv"
-	"sync"
 	"time"
-)
-
-var (
-	pattern     = regexp.MustCompile(`^\[.*?] (.*) - (\d+)(?:\.(\d+))?(?:[vV](\d+?))? \((\d+?p)\) \[.*?].mkv`)
-	resolutions = []string{"1080p", "720p", "540p", "480p"}
 )
 
 type Episode struct {
@@ -38,52 +30,64 @@ type Group struct {
 	Downloads          []Download
 }
 
-type rssResult struct {
-	Episode
-	Download
+type Client struct {
+	http *http.Client
 }
 
-type resultSet []*rssResult
+func New() *Client {
+	return &Client{http: http.DefaultClient}
+}
 
-type resultSets []resultSet
-
-func (s resultSet) Find(episode Episode) *rssResult {
-	for _, result := range s {
-		if result.Episode == episode {
-			return result
-		}
+func (c *Client) Episodes(ctx context.Context) ([]Group, error) {
+	type episodesResult struct {
+		Resolution string
+		Results    resultSet
+		Err        error
 	}
-	return nil
-}
 
-func Episodes(ctx context.Context) ([]Group, error) {
-	results := make(resultSets, len(resolutions), len(resolutions))
-	wg := sync.WaitGroup{}
-	for i, res := range resolutions {
-		u, err := getUrl(res)
-		if err != nil {
-			return nil, err
-		}
-		wg.Add(1)
-		go func(wg *sync.WaitGroup, index int, u *url.URL) {
-			a, err := getAnime(ctx, u)
+	ch := make(chan episodesResult)
+	m := make(map[string]resultSet)
+	ctc, cancel := context.WithCancel(ctx)
+	defer cancel()
+	for _, res := range resolutions {
+		go func(wg chan episodesResult, res string) {
+			u, err := getUrl(res)
 			if err != nil {
-				log.Warn(err)
+				ch <- episodesResult{Err: err}
+				return
 			}
-			results[index] = a
-			wg.Done()
-		}(&wg, i, u)
+			a, err := c.getAnime(ctc, u)
+			if err != nil {
+
+				ch <- episodesResult{Err: err}
+				return
+			}
+			ch <- episodesResult{Resolution: res, Results: a}
+		}(ch, res)
 	}
-	wg.Wait()
-	return results.Group(), nil
+
+	for range resolutions {
+		select {
+		case r := <-ch:
+			if r.Err != nil {
+				log.Warnf("Failed to get anime for %s", r.Err)
+				continue
+			}
+			m[r.Resolution] = r.Results
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	return groupResults(m), nil
 }
 
-func (s resultSets) Group() []Group {
+func groupResults(s map[string]resultSet) []Group {
 	m := make(map[Episode]*Group, len(s))
 	for _, set := range s {
 		for _, result := range set {
 			if result == nil {
-				fmt.Printf("Missing episode in %v\n", set)
+				log.Warnf("Missing episode in %v", set)
 				continue
 			}
 			if a, ok := m[result.Episode]; ok {
@@ -105,45 +109,6 @@ func (s resultSets) Group() []Group {
 	return r
 }
 
-func getAnime(ctx context.Context, url *url.URL) (resultSet, error) {
-	fp := gofeed.NewParser()
-	feed, err := fp.ParseURLWithContext(url.String(), ctx)
-	if err != nil {
-		return nil, err
-	}
-	r := make([]*rssResult, 0, len(feed.Items))
-	for _, item := range feed.Items {
-		matches := pattern.FindStringSubmatch(item.Title)
-		if matches == nil {
-			//log.Warnf("Failed to match %s", item.AnimeTitle)
-			continue
-		}
-
-		var episode, decimal, version uint64
-		episode, _ = strconv.ParseUint(matches[2], 10, 16)
-		decimal, _ = strconv.ParseUint(matches[3], 10, 16)
-		version, _ = strconv.ParseUint(matches[4], 10, 16)
-
-		result := rssResult{
-			Episode{
-				AnimeTitle: matches[1],
-				Number:     uint16(episode),
-				Decimal:    uint16(decimal),
-				Version:    uint16(version),
-			},
-			Download{
-				Comments:      item.GUID,
-				Resolution:    matches[5],
-				Torrent:       item.Link,
-				FileName:      matches[0],
-				PublishedDate: item.PublishedParsed,
-			},
-		}
-		r = append(r, &result)
-	}
-	return r, nil
-}
-
 func getUrl(resolution string) (*url.URL, error) {
 	u, err := url.Parse("https://nyaa.si/")
 	if err != nil {
@@ -152,7 +117,7 @@ func getUrl(resolution string) (*url.URL, error) {
 	v := u.Query()
 	v.Set("page", "rss")
 	v.Set("c", "1_2")
-	v.Set("q", fmt.Sprintf("[SubsPlease] %s", resolution))
+	v.Set("q", fmt.Sprintf("[SubsPlease] (%s)", resolution))
 	u.RawQuery = v.Encode()
 	return u, nil
 }

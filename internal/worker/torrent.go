@@ -18,7 +18,7 @@ type nyaaWorker struct {
 	lastCheck time.Time
 }
 
-func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client) Worker {
+func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaa.Client) Worker {
 	w := nyaaWorker{db: db, kitsu: kitsu, lastCheck: time.Now()}
 	return func(ctx context.Context, s *discordgo.Session) {
 		checkTime := time.Now()

@@ -18,22 +18,20 @@ func TestWeightedArgument(t *testing.T) {
 		weight += float64(argument.Weight)
 	}
 
-	results := make([]int, runs)
 	var sum int64
 	for i := 0; i < runs; i++ {
-		rand.Seed(int64(i))
+		rand.Seed(int64(31 * i))
 		j := 1
 		for ; j <= 10_000; j++ {
-			a := list.Random()
+			a := list.Pick()
 			if a.Query == "froggers" {
-				results[i] = j
 				sum += int64(j)
 				j = -1
 				break
 			}
 		}
 		if j != -1 {
-			results[i] = -1
+			t.Logf("%05d Didn't occur in 10,000 rounds", i)
 		}
 	}
 	avg := float64(sum) / float64(runs)
