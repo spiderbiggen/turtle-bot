@@ -33,8 +33,7 @@ func MatchChecker(db *postgres2.Client, couch *couch2.Client, client *riot.Clien
 }
 
 func (w *LeagueWorker) downloadMatches(ctx context.Context, summoners []*riot.Summoner) {
-	c := len(summoners)
-	if c == 0 {
+	if len(summoners) == 0 {
 		return
 	}
 
@@ -45,7 +44,6 @@ func (w *LeagueWorker) downloadMatches(ctx context.Context, summoners []*riot.Su
 	}
 	iSize := len(ids)
 	if iSize == 0 {
-		log.Debug("No matchIds for summoners")
 		return
 	}
 
@@ -105,14 +103,22 @@ func (w *LeagueWorker) getMatches(ctx context.Context, matchIds []string) {
 		return
 	}
 
+	i := 0
 	for _, id := range matchIds {
 		match, err := w.Match(ctx, riot.EUW1, id)
 		if err != nil {
-			return
+			log.Errorf("Failed to retrieve match: %v", err)
+			continue
 		}
-		err = w.couch.AddMatch(ctx, match)
-		if err != nil {
+		if err := w.couch.AddMatch(ctx, match); err != nil {
 			log.Warnf("Failed to add match to database: %v", err)
+			continue
 		}
+		i++
 	}
+	if i == 0 {
+		log.Errorf("Failed to save %d matches", len(matchIds))
+		return
+	}
+	log.Infof("Succesfully saved %d matches", i)
 }
