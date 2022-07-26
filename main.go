@@ -174,7 +174,7 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 
 		var err error
 		nyaa := worker.NyaaCheck(db, kitsu, nyaa)
-		_, err = cron.AddFunc("*/10 * * * *", func() {
+		_, err = cron.AddFunc("*/30 * * * *", func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancelFunc()
 			nyaa(timeout, s)
