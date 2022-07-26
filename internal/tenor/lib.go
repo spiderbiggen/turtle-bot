@@ -1,13 +1,35 @@
 package tenor
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"golang.org/x/time/rate"
 	"net/http"
 	"net/url"
-	"os"
-	"strconv"
+	"time"
 )
+
+var (
+	ErrNoQuery           = errors.New("no search query")
+	ErrInvalidStatus     = errors.New("invalid status code")
+	ErrRateLimitExceeded = errors.New("rate limit exceeded")
+)
+
+type Client struct {
+	key  string
+	Http *http.Client
+	Rate *rate.Limiter
+}
+
+func New(key string) *Client {
+	return &Client{
+		key:  key,
+		Http: http.DefaultClient,
+		Rate: rate.NewLimiter(rate.Every(1*time.Second), 1),
+	}
+}
 
 type Response struct {
 	Results ResultList `json:"results"`
@@ -22,83 +44,81 @@ type Result struct {
 
 type ResultList []*Result
 
-func Random(query string, opts ...Opt) (ResultList, error) {
-	return newQuery(random, query, opts...).request()
+func (c *Client) Search(ctx context.Context, query string, opts ...SearchOpt) (ResultList, error) {
+	if query == "" {
+		return nil, ErrNoQuery
+	}
+	p := tenorSearchParameters{Query: query}
+	for _, opt := range opts {
+		opt(&p)
+	}
+	return c.request(ctx, p)
 }
 
-func Search(query string, opts ...Opt) (ResultList, error) {
-	return newQuery(search, query, opts...).request()
-}
+type SearchOpt func(query *tenorSearchParameters)
 
-func Trending(opts ...Opt) (ResultList, error) {
-	return newQuery(trending, "", opts...).request()
-}
-
-type Opt func(query *tenorQuery)
-
-func WithLocale(locale string) func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithLocale(locale string) func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.Locale = locale
 	}
 }
 
-func WithNoContentFilter() func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithNoContentFilter() func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.ContentFilter = off
 	}
 }
 
-func WithLowContentFilter() func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithLowContentFilter() func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.ContentFilter = low
 	}
 }
 
-func WithMediumContentFilter() func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithMediumContentFilter() func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.ContentFilter = medium
 	}
 }
 
-func WithHighContentFilter() func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithHighContentFilter() func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.ContentFilter = high
 	}
 }
 
-func WithMinimalMediaFilter() func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithMinimalMediaFilter() func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.MediaFilter = minimal
 	}
 }
 
-func WithBasicMediaFilter() func(query *tenorQuery) {
-	return func(query *tenorQuery) {
+func WithBasicMediaFilter() func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
 		query.MediaFilter = basic
 	}
 }
 
-func WithLimit(limit uint8) func(query *tenorQuery) {
-	return func(query *tenorQuery) {
-		query.Limit = &limit
+func WithLimit(limit uint8) func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
+		query.Limit = limit
 	}
 }
 
-func WithPosition(pos uint8) func(query *tenorQuery) {
-	return func(query *tenorQuery) {
-		query.Position = &pos
+func WithPosition(pos uint8) func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
+		query.Position = pos
 	}
 }
 
-type endpoint string
+func WithRandom(random bool) func(query *tenorSearchParameters) {
+	return func(query *tenorSearchParameters) {
+		query.Random = random
+	}
+}
+
 type contentFilter string
 type mediaFilter string
-
-const (
-	search   endpoint = "search"
-	random   endpoint = "random"
-	trending endpoint = "trending"
-)
 
 const (
 	off    contentFilter = "off"
@@ -107,32 +127,60 @@ const (
 	high   contentFilter = "high"
 )
 
+// deprecated
 const (
 	minimal mediaFilter = "minimal"
 	basic   mediaFilter = "basic"
 )
 
-type tenorQuery struct {
+type tenorSearchParameters struct {
 	Query         string
 	Locale        string
-	Endpoint      endpoint
+	Random        bool
 	ContentFilter contentFilter
 	MediaFilter   mediaFilter
-	Limit         *uint8
-	Position      *uint8
+	Limit         uint8
+	Position      uint8
 }
 
-func (t tenorQuery) Url() (url *url.URL, err error) {
-	sprintf := fmt.Sprintf("https://g.tenor.com/v1/%s", t.Endpoint)
-	if url, err = url.Parse(sprintf); err != nil {
-		return
+func (c *Client) request(ctx context.Context, t tenorSearchParameters) (ResultList, error) {
+	u, err := c.url(t)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	err = c.Rate.Wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.Http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return nil, fmt.Errorf("%w: got %v", ErrInvalidStatus, res.Status)
+	}
+	var response Response
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return nil, err
+	}
+	return response.Results, nil
+}
+
+func (c *Client) url(t tenorSearchParameters) (*url.URL, error) {
+	url, err := url.Parse("https://tenor.googleapis.com/v2/search")
+	if err != nil {
+		return nil, err
 	}
 	q := url.Query()
-	q.Set("key", os.Getenv("TENOR_KEY"))
-
-	if t.Query != "" {
-		q.Set("q", t.Query)
-	}
+	q.Set("key", c.key)
+	q.Set("q", t.Query)
+	q.Set("random", fmt.Sprintf("%t", t.Random))
+	q.Set("pos", fmt.Sprintf("%d", t.Position))
 
 	if t.Locale != "" {
 		q.Set("locale", t.Locale)
@@ -142,47 +190,16 @@ func (t tenorQuery) Url() (url *url.URL, err error) {
 		q.Set("contentfilter", string(t.ContentFilter))
 	}
 
-	if t.MediaFilter != "" {
-		q.Set("media_filter", string(t.MediaFilter))
-	} else {
-		q.Set("media_filter", string(minimal))
+	q.Set("media_filter", "gif,gif_transparent")
+	// TODO
+	//if t.MediaFilter != "" {
+	//	q.Set("media_filter", string(t.MediaFilter))
+	//}
+
+	if t.Limit != 0 {
+		q.Set("limit", fmt.Sprintf("%d", t.Limit))
 	}
 
-	if t.Limit != nil {
-		q.Set("limit", strconv.FormatUint(uint64(*t.Limit), 10))
-	}
-
-	if t.Position != nil {
-		q.Set("pos", strconv.FormatUint(uint64(*t.Position), 10))
-	}
 	url.RawQuery = q.Encode()
-	return
-}
-
-func newQuery(e endpoint, q string, opts ...Opt) tenorQuery {
-	t := tenorQuery{Endpoint: e, Query: q}
-	for _, opt := range opts {
-		opt(&t)
-	}
-	return t
-}
-
-func (t tenorQuery) request() (ResultList, error) {
-	u, err := t.Url()
-	if err != nil {
-		return nil, err
-	}
-	res, err := http.Get(u.String())
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	if res.StatusCode < 200 || res.StatusCode > 299 {
-		return nil, fmt.Errorf("invalid status: got %v", res.Status)
-	}
-	var response Response
-	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
-		return nil, err
-	}
-	return response.Results, nil
+	return url, nil
 }

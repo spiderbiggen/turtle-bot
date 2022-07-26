@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
@@ -44,9 +45,11 @@ func (a Args) Pick() *WeightedArgument {
 	return a[len(a)-1]
 }
 
-type Apex struct{}
+type Apex struct {
+	*tenor.Client
+}
 
-func (a *Apex) Command() *discordgo.ApplicationCommand {
+func (c *Apex) Command() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "apex",
 		Description: "Drops an apex gif with someones name",
@@ -61,21 +64,23 @@ func (a *Apex) Command() *discordgo.ApplicationCommand {
 	}
 }
 
-func (a *Apex) InteractionID() string { return "apex" }
+func (c *Apex) InteractionID() string { return "apex" }
 
-func (a *Apex) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand("Time for Apex\nLet's go %[1]s\n%[2]s",
+func (c *Apex) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand(c.Client, "Time for Apex\nLet's go %[1]s\n%[2]s",
 		&WeightedArgument{Query: "Apex Legends"},
 	)(s, i)
 }
 
-type Hurry struct{}
+type Hurry struct {
+	*tenor.Client
+}
 
-func (h *Hurry) InteractionID() string {
+func (c *Hurry) InteractionID() string {
 	return "hurry"
 }
 
-func (h *Hurry) Command() *discordgo.ApplicationCommand {
+func (c *Hurry) Command() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "hurry",
 		Description: "Hurry up",
@@ -90,19 +95,21 @@ func (h *Hurry) Command() *discordgo.ApplicationCommand {
 	}
 }
 
-func (h *Hurry) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand("Hurry up %[1]s\n%[2]s",
+func (c *Hurry) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand(c.Client, "Hurry up %[1]s\n%[2]s",
 		&WeightedArgument{Query: "hurry up"},
 	)(s, i)
 }
 
-type Play struct{}
+type Play struct {
+	*tenor.Client
+}
 
-func (p *Play) InteractionID() string {
+func (c *Play) InteractionID() string {
 	return "play"
 }
 
-func (p *Play) Command() *discordgo.ApplicationCommand {
+func (c *Play) Command() *discordgo.ApplicationCommand {
 	return &discordgo.ApplicationCommand{
 		Name:        "play",
 		Description: "Tag the channel or someone to come play some games",
@@ -117,13 +124,15 @@ func (p *Play) Command() *discordgo.ApplicationCommand {
 	}
 }
 
-func (p *Play) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand("Let's go %[1]s\n%[2]s",
+func (c *Play) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand(c.Client, "Let's go %[1]s\n%[2]s",
 		&WeightedArgument{Query: "games"},
 	)(s, i)
 }
 
-type Sleep struct{}
+type Sleep struct {
+	*tenor.Client
+}
 
 func (c *Sleep) InteractionID() string {
 	return "sleep"
@@ -137,14 +146,16 @@ func (c *Sleep) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand("%[2]s",
+	gifCommand(c.Client, "%[2]s",
 		&WeightedArgument{Query: "sleep", Weight: 80},
 		&WeightedArgument{Query: "night", Weight: 70},
 		&WeightedArgument{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624", Weight: 1},
 	)(s, i)
 }
 
-type Morb struct{}
+type Morb struct {
+	*tenor.Client
+}
 
 func (c *Morb) InteractionID() string { return "morb" }
 
@@ -156,7 +167,7 @@ func (c *Morb) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Morb) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand("%[2]s",
+	gifCommand(c.Client, "%[2]s",
 		&WeightedArgument{Query: "Morbius"},
 		&WeightedArgument{Query: "Morbin"},
 		&WeightedArgument{Query: "Morb"},
@@ -171,19 +182,19 @@ func (u *User) mention() string {
 	}
 }
 
-func gifCommand(gifText string, queries ...*WeightedArgument) Handler {
+func gifCommand(tenor *tenor.Client, gifText string, queries ...*WeightedArgument) Handler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
 		if len(queries) == 0 {
 			log.Errorf("No queries for command %s", i.Interaction.ID)
 			return
 		}
-		timeOut := time.NewTimer(10 * time.Second)
-		defer timeOut.Stop()
 
 		mention := userFromOptions(s, i).mention()
 
 		c := make(chan string)
-		go getGif(c, queries)
+		go getGif(ctx, tenor, c, queries)
 
 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -205,14 +216,14 @@ func gifCommand(gifText string, queries ...*WeightedArgument) Handler {
 				log.Errorf("discord failed to complete interaction message: %v", err)
 				_ = s.InteractionResponseDelete(i.Interaction)
 			}
-		case <-timeOut.C:
+		case <-ctx.Done():
 			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Warnf("Failed to send gif response within 15 seconds")
 		}
 	}
 }
 
-func getGif(c chan string, queries []*WeightedArgument) {
+func getGif(ctx context.Context, t *tenor.Client, c chan string, queries []*WeightedArgument) {
 	q := Args(queries).Pick()
 	log.Debugf("Using query %+v", q)
 	if q.Url != "" {
@@ -227,11 +238,7 @@ func getGif(c chan string, queries []*WeightedArgument) {
 		}
 		var gifs tenor.ResultList
 		var err error
-		if q.IsSearch {
-			gifs, err = tenor.Search(q.Query, tenor.WithLimit(1))
-		} else {
-			gifs, err = tenor.Random(q.Query, tenor.WithLimit(1))
-		}
+		gifs, err = t.Search(ctx, q.Query, tenor.WithLimit(1), tenor.WithRandom(q.IsSearch))
 		if err != nil {
 			log.Errorf("Tenor Failed somewhere. %v", err)
 			continue
