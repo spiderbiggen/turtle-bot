@@ -17,6 +17,7 @@ import (
 	"weeb_bot/internal/riot"
 	"weeb_bot/internal/storage/couch"
 	"weeb_bot/internal/storage/postgres"
+	tenorApi "weeb_bot/internal/tenor"
 	"weeb_bot/internal/worker"
 )
 
@@ -55,14 +56,14 @@ func main() {
 	}()
 	kitsu := kitsuApi.New()
 	nyaa := nyaaApi.New()
-
+	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
 	client := riot.New(os.Getenv("RIOT_KEY"))
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu, nyaa))
+	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu, nyaa, tenor))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -162,12 +163,12 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
-			&command.Apex{}, &command.Play{}, &command.Hurry{},
-			&command.Morb{}, &command.Sleep{},
+			&command.Apex{Client: tenor}, &command.Play{Client: tenor}, &command.Hurry{Client: tenor},
+			&command.Morb{Client: tenor}, &command.Sleep{Client: tenor},
 			command.RiotGroup(client, db),
 			command.AnimeGroup(kitsu, db),
 		)
