@@ -167,7 +167,7 @@ func (g *RiotGroup) GetMatchHistory(s *riot.Summoner, region riot.Region) {
 	options := &riot.MatchIdsOptions{StartTime: start.Unix(), Count: 100}
 	var tries, count, failed int
 	defer func() {
-		log.Infof("Got Matches for %s: saved %d, failed %d", s.SummonerName, count, failed)
+		log.Debugf("Got Matches for %s: saved %d, failed %d", s.SummonerName, count, failed)
 	}()
 
 	for {

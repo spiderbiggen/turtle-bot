@@ -21,4 +21,4 @@ WORKDIR /opt
 COPY --from=Builder /weeb_bot /weeb_bot
 
 EXPOSE 8080
-ENTRYPOINT ["/weeb_bot"]
+ENTRYPOINT ["/weeb_bot", "-level=info"]
