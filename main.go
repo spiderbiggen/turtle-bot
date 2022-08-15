@@ -47,7 +47,7 @@ func main() {
 	}
 	couchdb := couch.New()
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err = couchdb.Init(ctx)
 		if err != nil {
@@ -82,7 +82,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Error opening discord connection,", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -169,7 +169,7 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 		registerCommands(s,
 			&command.Apex{Client: tenor}, &command.Play{Client: tenor}, &command.Hurry{Client: tenor},
 			&command.Morb{Client: tenor}, &command.Sleep{Client: tenor},
-			command.RiotGroup(client, db),
+			command.NewRiotGroup(client, db, couch),
 			command.AnimeGroup(kitsu, db),
 		)
 

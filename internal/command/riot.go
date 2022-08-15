@@ -7,24 +7,31 @@ import (
 	"golang.org/x/net/context"
 	"time"
 	"weeb_bot/internal/riot"
+	"weeb_bot/internal/storage/couch"
 	"weeb_bot/internal/storage/postgres"
 )
 
-type riotGroup struct {
-	api *riot.Client
-	db  *postgres.Client
+const (
+	maxTries = 3
+)
+
+type RiotGroup struct {
+	Api   *riot.Client
+	Db    *postgres.Client
+	Couch *couch.Client
 }
 
-func RiotGroup(api *riot.Client, store *postgres.Client) InteractionHandler {
-	return &riotGroup{
-		api: api,
-		db:  store,
+func NewRiotGroup(api *riot.Client, store *postgres.Client, couch *couch.Client) InteractionHandler {
+	return &RiotGroup{
+		Api:   api,
+		Db:    store,
+		Couch: couch,
 	}
 }
 
-func (g *riotGroup) InteractionID() string { return "lol" }
+func (g *RiotGroup) InteractionID() string { return "lol" }
 
-func (g *riotGroup) Command() *discordgo.ApplicationCommand {
+func (g *RiotGroup) Command() *discordgo.ApplicationCommand {
 	var regionOptions []*discordgo.ApplicationCommandOptionChoice
 	for _, region := range riot.Regions {
 		realm, _ := region.Realm()
@@ -62,7 +69,7 @@ func (g *riotGroup) Command() *discordgo.ApplicationCommand {
 	}
 }
 
-func (g *riotGroup) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (g *RiotGroup) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
 	log.Debugf("Responding to lol.%s", options[0].Name)
 	switch options[0].Name {
@@ -84,7 +91,7 @@ func (g *riotGroup) HandleInteraction(s *discordgo.Session, i *discordgo.Interac
 	}
 }
 
-func (g *riotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+func (g *RiotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -113,7 +120,7 @@ func (g *riotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCr
 	ce := make(chan string)
 
 	go func() {
-		summoner, err := g.api.SummonerByName(ctx, region, summonerName)
+		summoner, err := g.Api.SummonerByName(ctx, region, summonerName)
 		if err != nil {
 			log.Errorf("User did not enter correct summonerName or Region, %v", err)
 			realm, _ := region.Realm()
@@ -124,12 +131,13 @@ func (g *riotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCr
 		if usr == nil {
 			usr = i.Member.User
 		}
-		err = g.db.InsertDiscordSummoner(ctx, usr.ID, summoner)
+		err = g.Db.InsertDiscordSummoner(ctx, usr.ID, summoner)
 		if err != nil {
 			log.Errorf("Failed to store summoner in database, %v", err)
 			ce <- "Internal server error, please try again later."
 			return
 		}
+		go g.GetMatchHistory(summoner, region)
 		cs <- fmt.Sprintf("Successfully linked %s to you", summoner.SummonerName)
 	}()
 
@@ -137,7 +145,7 @@ func (g *riotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCr
 	case msg := <-cs:
 		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: msg})
 		if err != nil {
-			s.InteractionResponseDelete(i.Interaction)
+			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Errorf("discord failed to respond with a message: %v", err)
 		}
 	case msg := <-ce:
@@ -146,7 +154,69 @@ func (g *riotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCr
 			log.Errorf("discord failed to respond with an error message: %v", err)
 		}
 	case <-ctx.Done():
-		s.InteractionResponseDelete(i.Interaction)
+		_ = s.InteractionResponseDelete(i.Interaction)
 		log.Warnf("Failed to send subscribe response within 15 seconds")
+	}
+}
+
+func (g *RiotGroup) GetMatchHistory(s *riot.Summoner, region riot.Region) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	start := time.Now().AddDate(0, -3, 0)
+	start = time.Date(start.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+	options := &riot.MatchIdsOptions{StartTime: start.Unix(), Count: 100}
+	var tries, count, failed int
+	defer func() {
+		log.Infof("Got Matches for %s: saved %d, failed %d", s.SummonerName, count, failed)
+	}()
+
+	for {
+		matches, err := g.Api.MatchIds(ctx, region, s.Puuid, options)
+		if err != nil {
+			tries += 1
+			if tries <= maxTries {
+				continue
+			}
+			log.Errorf("Failed to get matches for %s: %v", s.SummonerName, err)
+			return
+		}
+		log.Debugf("%d <- %#v", len(matches), options)
+		if len(matches) == 0 {
+			return
+		}
+		// Remove retrieved matches
+		ids, err := g.Couch.FilterMatchIds(ctx, matches)
+		if err != nil {
+			tries += 1
+			if tries <= maxTries {
+				continue
+			}
+			log.Errorf("Failed to get matches for %s: %v", s.SummonerName, err)
+			return
+		}
+
+		for _, id := range ids {
+			match, err := g.Api.Match(ctx, region, id)
+			if err != nil {
+				log.Errorf("Failed to get match %s for %s: %v", id, s.SummonerName, err)
+				failed++
+				continue
+			}
+			log.Debugf("Got match %d", count)
+			err = g.Couch.AddMatch(ctx, match)
+			if err != nil {
+				log.Errorf("Failed to store match %s for %s: %v", id, s.SummonerName, err)
+				failed++
+				continue
+			}
+			count++
+		}
+
+		if len(matches) != int(options.Count) {
+			break
+		}
+
+		tries = 0
+		options.Start += int32(options.Count)
 	}
 }

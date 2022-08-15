@@ -67,7 +67,7 @@ func (w *LeagueWorker) lastMatchesForSummoners(ctx context.Context, summoners []
 	for _, summoner := range summoners {
 		ids, err := w.MatchIds(ctx, riot.EUW1, summoner.Puuid, &riot.MatchIdsOptions{Count: 100})
 		if err != nil {
-			log.Warnf("Failed to get match info for %v", summoner)
+			log.Warnf("Failed to get match info for %s", summoner.SummonerName)
 			continue
 		}
 
