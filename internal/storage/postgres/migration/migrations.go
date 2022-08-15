@@ -54,7 +54,7 @@ func Register(m migration) {
 // Up runs all migrationSlice in the registry
 func Up(ctx context.Context, conn *sqlx.DB) error {
 	if len(migrationRegistry) == 0 {
-		log.Warnf("No migrationSlice registered")
+		log.Debugf("No migrations registered")
 		return nil
 	}
 
@@ -87,7 +87,7 @@ func Up(ctx context.Context, conn *sqlx.DB) error {
 
 	if len(migrations) == 0 {
 		last := cm[len(cm)-1]
-		log.Infof("Current version %d: %s", last.ID, last.Name)
+		log.Debugf("Current version %d: %s", last.ID, last.Name)
 		return nil
 	}
 
@@ -123,6 +123,6 @@ func Up(ctx context.Context, conn *sqlx.DB) error {
 		return err
 	}
 	last := migrations[len(migrations)-1]
-	log.Infof("Current version %d: %s", last.Index(), last.Name())
+	log.Debugf("Current version %d: %s", last.Index(), last.Name())
 	return nil
 }

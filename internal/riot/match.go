@@ -10,11 +10,11 @@ import (
 
 type MatchIdsOptions struct {
 	Type      string
-	StartTime uint64
-	EndTime   uint64
-	Queue     uint32
-	Start     uint32
-	Count     uint8
+	StartTime int64
+	EndTime   int64
+	Queue     int32
+	Start     int32
+	Count     int8
 }
 
 type Match struct {
@@ -331,19 +331,19 @@ func (c *Client) MatchIds(ctx context.Context, region Region, puuid string, opti
 			q.Set("type", options.Type)
 		}
 		if options.StartTime != 0 {
-			q.Set("startTime", strconv.FormatUint(options.StartTime, 10))
+			q.Set("startTime", strconv.FormatInt(options.StartTime, 10))
 		}
 		if options.EndTime != 0 {
-			q.Set("endTime", strconv.FormatUint(options.EndTime, 10))
+			q.Set("endTime", strconv.FormatInt(options.EndTime, 10))
 		}
 		if options.Queue != 0 {
-			q.Set("queue", strconv.FormatUint(uint64(options.Queue), 10))
+			q.Set("queue", strconv.FormatInt(int64(options.Queue), 10))
 		}
 		if options.Start != 0 {
-			q.Set("start", strconv.FormatUint(uint64(options.Start), 10))
+			q.Set("start", strconv.FormatInt(int64(options.Start), 10))
 		}
 		if options.Count != 0 {
-			q.Set("count", strconv.FormatUint(uint64(options.Count), 10))
+			q.Set("count", strconv.FormatInt(int64(options.Count), 10))
 		}
 		u.RawQuery = q.Encode()
 	}
@@ -351,7 +351,7 @@ func (c *Client) MatchIds(ctx context.Context, region Region, puuid string, opti
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var s []string
 	if err := json.NewDecoder(resp.Body).Decode(&s); err != nil {
@@ -370,7 +370,7 @@ func (c *Client) Match(ctx context.Context, region Region, id string) (*Match, e
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var m Match
 	if err := json.NewDecoder(resp.Body).Decode(&m); err != nil {

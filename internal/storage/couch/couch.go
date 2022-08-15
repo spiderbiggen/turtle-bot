@@ -86,8 +86,47 @@ func (c *Client) Init(ctx context.Context) error {
 	}
 
 	_, err = db.Put(ctx, "_design/matches", map[string]interface{}{
-		"_id":   "_design/matches",
-		"views": map[string]interface{}{},
+		"_id": "_design/matches",
+		"views": map[string]interface{}{
+			"player_average": map[string]interface{}{
+				"map": `function(doc) {
+    if (!!doc.info && !!doc.info.participants && Array.isArray(doc.info.participants)) {
+        const emObject = function(prefix, arg) {
+        	const keys = Object.keys(arg)
+            for (const k of keys) {
+                const pre = [...prefix,k];
+                if (arg[k] == undefined){
+                    continue;
+                }
+                if (typeof arg[k] == 'object' && !Array.isArray(arg[k])) {
+                    emObject(pre, arg[k]);
+                } else if (typeof arg[k] == 'number') {
+                    emit(pre, arg[k]);
+                }
+            }
+        }
+        for (const d of doc.info.participants) {
+            emObject([d.puuid, d.queueId], d);
+        }
+    }
+}`,
+				"reduce": `function(keys, values, rereduce) {
+    if (rereduce) {
+        var count = values.reduce(function (a, b) {
+            return a + b.count
+        }, 0)
+        var s = values.reduce(function (a, b) {
+            return a + b.sum
+        }, 0)
+        return s / count
+    } else {
+        var count = values.length
+        var s = sum(values)
+        return {count: count, sum: s}
+    }
+}`,
+			},
+		},
 	})
 
 	return err
