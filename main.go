@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	cronLib "github.com/robfig/cron/v3"
@@ -27,9 +28,22 @@ var (
 	registeredCommands []*discordgo.ApplicationCommand
 )
 
-func main() {
+var (
+	logLevel string
+)
+
+func init() {
+	flag.StringVar(&logLevel, "level", log.DebugLevel.String(), "Set log level, one of: trace, debug, info, warn, error, fatal, panic")
 	rand.Seed(time.Now().Unix())
-	log.SetLevel(log.TraceLevel)
+}
+
+func main() {
+	flag.Parse()
+	level, err := log.ParseLevel(logLevel)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.SetLevel(level)
 
 	hostname, _ := os.Hostname()
 	log.Infof("Starting Weeb Bot on %s", hostname)
@@ -37,27 +51,14 @@ func main() {
 	cron := cronLib.New()
 	defer cron.Stop()
 
-	log.Infoln("Migrating database...")
+	log.Debugln("Migrating database...")
 	db := postgres.New()
-	err := db.Migrate()
-	if err != nil {
-		log.Errorf("Error migrating database: %v", err)
-	} else {
-		log.Infof("Finished migration")
-	}
 	couchdb := couch.New()
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-		defer cancel()
-		err = couchdb.Init(ctx)
-		if err != nil {
-			log.Errorf("Error initializing database: %v", err)
-		}
-	}()
 	kitsu := kitsuApi.New()
 	nyaa := nyaaApi.New()
 	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
 	client := riot.New(os.Getenv("RIOT_KEY"))
+	migrateDatabases(db, couchdb)
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
@@ -82,7 +83,7 @@ func main() {
 	if err != nil {
 		log.Fatal("Error opening discord connection,", err)
 	}
-	defer d.Close()
+	defer func() { _ = d.Close() }()
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
@@ -146,7 +147,7 @@ func registerCommands(s *discordgo.Session, fs ...command.InteractionHandler) {
 		}
 	}()
 
-	log.Infof("Started bot with registered commands: %s", strings.Join(p, ", "))
+	log.Debugf("Started bot with registered commands: %s", strings.Join(p, ", "))
 }
 
 func filterRegisteredCommands(commands []*discordgo.ApplicationCommand, registeredCommands []string) []*discordgo.ApplicationCommand {
@@ -169,7 +170,7 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 		registerCommands(s,
 			&command.Apex{Client: tenor}, &command.Play{Client: tenor}, &command.Hurry{Client: tenor},
 			&command.Morb{Client: tenor}, &command.Sleep{Client: tenor},
-			command.RiotGroup(client, db),
+			command.NewRiotGroup(client, db, couch),
 			command.AnimeGroup(kitsu, db),
 		)
 
@@ -197,4 +198,21 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 		}
 		cron.Start()
 	}
+}
+
+func migrateDatabases(db *postgres.Client, couchdb *couch.Client) {
+	go func() {
+		if err := db.Migrate(); err != nil {
+			log.Errorf("Error migrating database: %v", err)
+		} else {
+			log.Debugf("Finished migration")
+		}
+	}()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := couchdb.Init(ctx); err != nil {
+			log.Errorf("Error initializing database: %v", err)
+		}
+	}()
 }

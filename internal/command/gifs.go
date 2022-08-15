@@ -238,7 +238,7 @@ func getGif(ctx context.Context, t *tenor.Client, c chan string, queries []*Weig
 		}
 		var gifs tenor.ResultList
 		var err error
-		gifs, err = t.Search(ctx, q.Query, tenor.WithLimit(1), tenor.WithRandom(q.IsSearch))
+		gifs, err = t.Search(ctx, q.Query, tenor.WithLimit(1), tenor.WithRandom(!q.IsSearch))
 		if err != nil {
 			log.Errorf("Tenor Failed somewhere. %v", err)
 			continue

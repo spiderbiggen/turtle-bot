@@ -12,9 +12,8 @@ import (
 )
 
 var (
-	ErrNoQuery           = errors.New("no search query")
-	ErrInvalidStatus     = errors.New("invalid status code")
-	ErrRateLimitExceeded = errors.New("rate limit exceeded")
+	ErrNoQuery       = errors.New("no search query")
+	ErrInvalidStatus = errors.New("invalid status code")
 )
 
 type Client struct {
@@ -57,68 +56,55 @@ func (c *Client) Search(ctx context.Context, query string, opts ...SearchOpt) (R
 
 type SearchOpt func(query *tenorSearchParameters)
 
-func WithLocale(locale string) func(query *tenorSearchParameters) {
+func WithLocale(locale string) SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.Locale = locale
 	}
 }
 
-func WithNoContentFilter() func(query *tenorSearchParameters) {
+func WithNoContentFilter() SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.ContentFilter = off
 	}
 }
 
-func WithLowContentFilter() func(query *tenorSearchParameters) {
+func WithLowContentFilter() SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.ContentFilter = low
 	}
 }
 
-func WithMediumContentFilter() func(query *tenorSearchParameters) {
+func WithMediumContentFilter() SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.ContentFilter = medium
 	}
 }
 
-func WithHighContentFilter() func(query *tenorSearchParameters) {
+func WithHighContentFilter() SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.ContentFilter = high
 	}
 }
 
-func WithMinimalMediaFilter() func(query *tenorSearchParameters) {
-	return func(query *tenorSearchParameters) {
-		query.MediaFilter = minimal
-	}
-}
-
-func WithBasicMediaFilter() func(query *tenorSearchParameters) {
-	return func(query *tenorSearchParameters) {
-		query.MediaFilter = basic
-	}
-}
-
-func WithLimit(limit uint8) func(query *tenorSearchParameters) {
+func WithLimit(limit uint8) SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.Limit = limit
 	}
 }
 
-func WithPosition(pos uint8) func(query *tenorSearchParameters) {
+func WithPosition(pos uint8) SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.Position = pos
 	}
 }
 
-func WithRandom(random bool) func(query *tenorSearchParameters) {
+func WithRandom(random bool) SearchOpt {
 	return func(query *tenorSearchParameters) {
 		query.Random = random
 	}
 }
 
 type contentFilter string
-type mediaFilter string
 
 const (
 	off    contentFilter = "off"
@@ -127,18 +113,11 @@ const (
 	high   contentFilter = "high"
 )
 
-// deprecated
-const (
-	minimal mediaFilter = "minimal"
-	basic   mediaFilter = "basic"
-)
-
 type tenorSearchParameters struct {
 	Query         string
 	Locale        string
 	Random        bool
 	ContentFilter contentFilter
-	MediaFilter   mediaFilter
 	Limit         uint8
 	Position      uint8
 }
@@ -160,7 +139,7 @@ func (c *Client) request(ctx context.Context, t tenorSearchParameters) (ResultLi
 	if err != nil {
 		return nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode < 200 || res.StatusCode > 299 {
 		return nil, fmt.Errorf("%w: got %v", ErrInvalidStatus, res.Status)
 	}
@@ -172,11 +151,11 @@ func (c *Client) request(ctx context.Context, t tenorSearchParameters) (ResultLi
 }
 
 func (c *Client) url(t tenorSearchParameters) (*url.URL, error) {
-	url, err := url.Parse("https://tenor.googleapis.com/v2/search")
+	u, err := url.Parse("https://tenor.googleapis.com/v2/search")
 	if err != nil {
 		return nil, err
 	}
-	q := url.Query()
+	q := u.Query()
 	q.Set("key", c.key)
 	q.Set("q", t.Query)
 	q.Set("random", fmt.Sprintf("%t", t.Random))
@@ -200,6 +179,6 @@ func (c *Client) url(t tenorSearchParameters) (*url.URL, error) {
 		q.Set("limit", fmt.Sprintf("%d", t.Limit))
 	}
 
-	url.RawQuery = q.Encode()
-	return url, nil
+	u.RawQuery = q.Encode()
+	return u, nil
 }

@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.18 as Builder
+FROM golang:1.19 as Builder
 
 WORKDIR /app
 
@@ -21,4 +21,4 @@ WORKDIR /opt
 COPY --from=Builder /weeb_bot /weeb_bot
 
 EXPOSE 8080
-ENTRYPOINT ["/weeb_bot"]
+ENTRYPOINT ["/weeb_bot", "-level=info"]
