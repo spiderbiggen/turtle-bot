@@ -2,6 +2,8 @@ package worker
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
@@ -46,6 +48,9 @@ func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, gro
 	var embed *discordgo.MessageEmbed
 	aSubs, err := w.db.GetSubscriptions(ctx, group.AnimeTitle)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return
+		}
 		log.Warnf("Failed to get subscriptions: %v", err)
 		return
 	}

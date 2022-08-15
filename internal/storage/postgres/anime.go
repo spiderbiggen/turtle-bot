@@ -92,11 +92,11 @@ func (c *Client) GetSubscriptions(ctx context.Context, queryTitle string) (*Anim
 		return nil, err
 	}
 	var anime Anime
-	if err = conn.GetContext(ctx, &anime, "SELECT * FROM anime WHERE query_title ILIKE ?", queryTitle); err != nil {
+	if err = conn.GetContext(ctx, &anime, "SELECT * FROM anime WHERE query_title ILIKE $1", queryTitle); err != nil {
 		return nil, fmt.Errorf("get anime: %w", err)
 	}
 	var subs []*AnimeSubscription
-	if err = conn.SelectContext(ctx, &subs, "SELECT * FROM anime_has_subscriptions WHERE anime_id = ?", anime.ID); err != nil {
+	if err = conn.SelectContext(ctx, &subs, "SELECT * FROM anime_has_subscriptions WHERE anime_id = $1", anime.ID); err != nil {
 		return nil, fmt.Errorf("select subs for %s: %w", anime.ID, err)
 	}
 	return &AnimeWithSubscriptions{Anime: &anime, Subs: subs}, nil
