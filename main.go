@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/patrickmn/go-cache"
 	cronLib "github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
@@ -58,13 +59,14 @@ func main() {
 	nyaa := nyaaApi.New()
 	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
 	client := riot.New(os.Getenv("RIOT_KEY"))
+	memCache := cache.New(5*time.Minute, 10*time.Minute)
 	migrateDatabases(db, couchdb)
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu, nyaa, tenor))
+	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu, nyaa, tenor, memCache))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -164,12 +166,15 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
-			&command.Apex{Client: tenor}, &command.Play{Client: tenor}, &command.Hurry{Client: tenor},
-			&command.Morb{Client: tenor}, &command.Sleep{Client: tenor},
+			&command.Apex{Client: tenor, Cache: memCache},
+			&command.Play{Client: tenor, Cache: memCache},
+			&command.Hurry{Client: tenor, Cache: memCache},
+			&command.Morb{Client: tenor, Cache: memCache},
+			&command.Sleep{Client: tenor, Cache: memCache},
 			command.NewRiotGroup(client, db, couch),
 			command.AnimeGroup(kitsu, db),
 		)
