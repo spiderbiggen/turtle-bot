@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"golang.org/x/time/rate"
 	"net/http"
 	"net/url"
@@ -159,7 +160,9 @@ func (c *Client) url(t tenorSearchParameters) (*url.URL, error) {
 	q.Set("key", c.key)
 	q.Set("q", t.Query)
 	q.Set("random", fmt.Sprintf("%t", t.Random))
-	q.Set("pos", fmt.Sprintf("%d", t.Position))
+	if t.Position != 0 {
+		q.Set("pos", fmt.Sprintf("%d", t.Position))
+	}
 
 	if t.Locale != "" {
 		q.Set("locale", t.Locale)
@@ -180,5 +183,6 @@ func (c *Client) url(t tenorSearchParameters) (*url.URL, error) {
 	}
 
 	u.RawQuery = q.Encode()
+	log.Debugf("%s", u.String())
 	return u, nil
 }

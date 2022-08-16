@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/patrickmn/go-cache"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"time"
@@ -47,6 +48,7 @@ func (a Args) Pick() *WeightedArgument {
 
 type Apex struct {
 	*tenor.Client
+	Cache *cache.Cache
 }
 
 func (c *Apex) Command() *discordgo.ApplicationCommand {
@@ -67,13 +69,14 @@ func (c *Apex) Command() *discordgo.ApplicationCommand {
 func (c *Apex) InteractionID() string { return "apex" }
 
 func (c *Apex) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, "Time for Apex\nLet's go %[1]s\n%[2]s",
+	gifCommand(c.Client, c.Cache, "Time for Apex\nLet's go %[1]s\n%[2]s",
 		&WeightedArgument{Query: "Apex Legends"},
 	)(s, i)
 }
 
 type Hurry struct {
 	*tenor.Client
+	Cache *cache.Cache
 }
 
 func (c *Hurry) InteractionID() string {
@@ -96,13 +99,14 @@ func (c *Hurry) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Hurry) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, "Hurry up %[1]s\n%[2]s",
+	gifCommand(c.Client, c.Cache, "Hurry up %[1]s\n%[2]s",
 		&WeightedArgument{Query: "hurry up"},
 	)(s, i)
 }
 
 type Play struct {
 	*tenor.Client
+	Cache *cache.Cache
 }
 
 func (c *Play) InteractionID() string {
@@ -125,13 +129,14 @@ func (c *Play) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Play) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, "Let's go %[1]s\n%[2]s",
+	gifCommand(c.Client, c.Cache, "Let's go %[1]s\n%[2]s",
 		&WeightedArgument{Query: "games"},
 	)(s, i)
 }
 
 type Sleep struct {
 	*tenor.Client
+	Cache *cache.Cache
 }
 
 func (c *Sleep) InteractionID() string {
@@ -146,7 +151,7 @@ func (c *Sleep) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, "%[2]s",
+	gifCommand(c.Client, c.Cache, "%[2]s",
 		&WeightedArgument{Query: "sleep", Weight: 80},
 		&WeightedArgument{Query: "night", Weight: 70},
 		&WeightedArgument{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624", Weight: 1},
@@ -155,6 +160,7 @@ func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.Interaction
 
 type Morb struct {
 	*tenor.Client
+	Cache *cache.Cache
 }
 
 func (c *Morb) InteractionID() string { return "morb" }
@@ -167,7 +173,7 @@ func (c *Morb) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Morb) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, "%[2]s",
+	gifCommand(c.Client, c.Cache, "%[2]s",
 		&WeightedArgument{Query: "Morbius"},
 		&WeightedArgument{Query: "Morbin"},
 		&WeightedArgument{Query: "Morb"},
@@ -182,7 +188,7 @@ func (u *User) mention() string {
 	}
 }
 
-func gifCommand(tenor *tenor.Client, gifText string, queries ...*WeightedArgument) Handler {
+func gifCommand(tenor *tenor.Client, memCache *cache.Cache, gifText string, queries ...*WeightedArgument) Handler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
@@ -194,7 +200,7 @@ func gifCommand(tenor *tenor.Client, gifText string, queries ...*WeightedArgumen
 		mention := userFromOptions(s, i).mention()
 
 		c := make(chan string)
-		go getGif(ctx, tenor, c, queries)
+		go getGif(ctx, tenor, memCache, c, queries)
 
 		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
@@ -223,7 +229,7 @@ func gifCommand(tenor *tenor.Client, gifText string, queries ...*WeightedArgumen
 	}
 }
 
-func getGif(ctx context.Context, t *tenor.Client, c chan string, queries []*WeightedArgument) {
+func getGif(ctx context.Context, t *tenor.Client, m *cache.Cache, c chan string, queries []*WeightedArgument) {
 	q := Args(queries).Pick()
 	log.Debugf("Using query %+v", q)
 	if q.Url != "" {
@@ -231,24 +237,28 @@ func getGif(ctx context.Context, t *tenor.Client, c chan string, queries []*Weig
 		return
 	}
 
-	for i := 0; i < 5; i++ {
-		m := i - 1
-		if m > 0 {
-			time.Sleep(time.Duration(i*i*25) * time.Millisecond)
+	var gifs tenor.ResultList
+	var err error
+	if p, found := m.Get(q.Query); found {
+		if cast, ok := p.(tenor.ResultList); ok {
+			gifs = cast
 		}
-		var gifs tenor.ResultList
-		var err error
-		gifs, err = t.Search(ctx, q.Query, tenor.WithLimit(1), tenor.WithRandom(!q.IsSearch))
+	}
+	if len(gifs) == 0 {
+		gifs, err = t.Search(ctx, q.Query, tenor.WithLimit(50), tenor.WithRandom(!q.IsSearch))
 		if err != nil {
-			log.Errorf("Tenor Failed somewhere. %v", err)
-			continue
-		}
-		if len(gifs) == 0 {
-			log.Warnf("No gifs found for query %s", q.Query)
+			log.Errorf("failed to search for gifs: %v", err)
 			c <- ""
 			return
 		}
-		c <- gifs[0].URL
+		if len(gifs) > 0 {
+			m.Set(q.Query, gifs, cache.DefaultExpiration)
+		}
+	}
+	if len(gifs) == 0 {
+		log.Warnf("No gifs found for query %s", q.Query)
+		c <- ""
 		return
 	}
+	c <- gifs[rand.Intn(len(gifs))].URL
 }
