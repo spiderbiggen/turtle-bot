@@ -2,61 +2,47 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
-	"strings"
+	"sync"
 	"time"
-	"unicode"
-	"weeb_bot/internal/command"
 	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage/couch"
-	"weeb_bot/internal/storage/postgres"
 )
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-	log.SetLevel(log.DebugLevel)
+	log.SetLevel(log.TraceLevel)
 	var err error
-	couchdb := couch.New()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithCancel(context.Background())
+	ctx = context.WithValue(ctx, "batch", false)
 	defer cancel()
-	conn, err := couchdb.Connection()
+	api := riot.New(os.Getenv("RIOT_KEY"))
+
+	summoner, err := api.SummonerByName(ctx, riot.EUW1, "TF Spiderbiggen")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	name, err := randomName()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer func() { _ = conn.DestroyDB(context.Background(), name) }()
-	if err := conn.CreateDB(ctx, name); err != nil {
-		log.Fatal(err)
-	}
-	couchdb.Database = name
-	if err := couchdb.Init(ctx); err != nil {
-		log.Fatal(err)
-	}
-	g := command.RiotGroup{Api: riot.New(os.Getenv("RIOT_KEY")), Db: postgres.New(), Couch: couchdb}
-
-	summoner, err := g.Api.SummonerByName(ctx, riot.EUW1, "TF Spiderbiggen")
-	if err != nil {
-		log.Fatal(err)
-	}
-	g.GetMatchHistory(summoner, riot.EUW1)
-}
-
-func randomName() (string, error) {
-	var result string
-	arr := make([]byte, 24)
-	for len(result) == 0 || unicode.IsDigit(rune(result[0])) {
-		if _, err := rand.Read(arr); err != nil {
-			continue
+	matchIds := make([]string, 0, 500)
+	for pos := int32(0); ; {
+		ids, _ := api.MatchIds(ctx, riot.EUW1, summoner.Puuid, &riot.MatchIdsOptions{Count: 100, Start: pos})
+		matchIds = append(matchIds, ids...)
+		pos += 100
+		if len(ids) < 100 {
+			break
 		}
-		result = strings.ToLower(base64.URLEncoding.EncodeToString(arr))
 	}
-	return result, nil
+	if len(matchIds) == 0 {
+		log.Fatal("No matches")
+	}
+	wg := sync.WaitGroup{}
+	for _, id := range matchIds {
+		go func(id string) {
+			wg.Add(1)
+			defer wg.Done()
+			_, _ = api.Match(ctx, riot.EUW1, id)
+		}(id)
+	}
+	wg.Wait()
 }

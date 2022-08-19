@@ -2,115 +2,147 @@ package limiter
 
 import (
 	"context"
+	log "github.com/sirupsen/logrus"
+	"math"
 	"sync"
 	"time"
 )
 
 type IntervalWindow struct {
-	Limits []Limit
-	count  map[time.Duration]uint
-	offset map[time.Duration]uint
-	start  time.Time
-	mu     *sync.Mutex
+	Limits       []Limit
+	maxInterval  time.Duration
+	maxBurst     int
+	reservations []*Reservation
+	counts       map[time.Duration]int
+	windowStart  map[time.Duration]time.Time
+	mu           *sync.Mutex
+	cleanup      bool
 }
 
 func NewIntervalWindow(limits ...Limit) *IntervalWindow {
+	var maxInterval time.Duration
+	var minBurst = math.MaxInt
+	for _, l := range limits {
+		if l.Interval > maxInterval {
+			maxInterval = l.Interval
+		}
+		if l.Count < minBurst {
+			minBurst = l.Count
+		}
+	}
+
 	return &IntervalWindow{
-		Limits: limits,
-		count:  make(map[time.Duration]uint),
-		offset: make(map[time.Duration]uint),
-		mu:     &sync.Mutex{},
+		Limits:      limits,
+		maxInterval: maxInterval,
+		maxBurst:    minBurst,
+		counts:      make(map[time.Duration]int),
+		windowStart: make(map[time.Duration]time.Time),
+		mu:          &sync.Mutex{},
 	}
 }
 
-func (i *IntervalWindow) Wait(ctx context.Context) (Incrementer, error) { return i.WaitBurst(ctx, 1) }
+func (i *IntervalWindow) StartCleanup() {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if !i.cleanup {
+		go func() {
+			t := time.NewTicker(5 * time.Minute)
+			for {
+				select {
+				case <-t.C:
+					count := i.Cleanup()
+					log.Debugf("Cleaned up %d old reservations", count)
+				}
+			}
+		}()
+	}
+}
 
-func (i *IntervalWindow) WaitBurst(ctx context.Context, n uint) (Incrementer, error) {
+func (i *IntervalWindow) Reserve(ctx context.Context) (*Reservation, error) {
+	return i.ReserveN(ctx, 1)
+}
+
+func (i *IntervalWindow) ReserveN(ctx context.Context, n int) (*Reservation, error) {
+	if n <= 0 {
+		return nil, ErrInvalidBurstSize
+	}
+	if n > i.maxBurst {
+		return nil, ErrBurstExceeded
+	}
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	now := time.Now()
-	c := make(chan error)
-	go func() {
-		i.mu.Lock()
-
-		i.resetStart(now)
-		i.resetIntervals(now)
-		max, err := i.maxIntervalN(n)
-		if err != nil || max == 0 {
-			c <- err
-			return
+	var reservation *Reservation
+	if len(i.reservations) == 0 {
+		reservation = &Reservation{count: n, time: now, ctx: ctx}
+		i.reservations = append(i.reservations, reservation)
+		for _, l := range i.Limits {
+			i.counts[l.Interval] = n
+			i.windowStart[l.Interval] = now
 		}
-		offset, _ := i.offset[max]
-		t := time.NewTimer(i.start.Add(time.Duration(offset+1) * max).Sub(now))
-		defer t.Stop()
-		select {
-		case <-t.C:
-			c <- nil
-		case <-ctx.Done():
+		return reservation, nil
+	} else {
+		var earliestAvailableStart = now
+		for _, l := range i.Limits {
+			s := i.windowStart[l.Interval]
+			if c, _ := i.counts[l.Interval]; c+n > l.Count {
+				s = s.Add(l.Interval)
+			}
+			if s.After(earliestAvailableStart) {
+				earliestAvailableStart = s
+			}
 		}
-	}()
-
-	select {
-	case err := <-c:
-		if err != nil {
-			i.mu.Unlock()
-			return func() {}, nil
+		if dl, ok := ctx.Deadline(); ok && earliestAvailableStart.After(dl) {
+			return nil, ErrTimeout
 		}
-		return func() {
-			i.resetIntervals(time.Now())
-			i.incrementN(n)
-			i.mu.Unlock()
-		}, nil
-	case <-ctx.Done():
-		i.mu.Unlock()
-		return func() {}, ErrTimeout
-	}
-}
-
-func (i *IntervalWindow) maxIntervalN(n uint) (time.Duration, error) {
-	var max time.Duration
-	for _, l := range i.Limits {
-		if n > l.Count {
-			return 0, ErrBurstExceeded
-		}
-		d, _ := i.count[l.Interval]
-		if d+n > l.Count {
-			if l.Interval > max {
-				max = l.Interval
+		reservation = &Reservation{count: n, time: earliestAvailableStart, ctx: ctx}
+		i.reservations = append(i.reservations, reservation)
+		for _, l := range i.Limits {
+			if earliestAvailableStart.After(i.windowStart[l.Interval].Add(l.Interval)) {
+				i.counts[l.Interval] = n
+				i.windowStart[l.Interval] = earliestAvailableStart
+			} else {
+				i.counts[l.Interval] += n
 			}
 		}
 	}
-	return max, nil
+	return reservation, nil
 }
 
-func (i *IntervalWindow) resetStart(t time.Time) {
-	allExpired := true
-	for _, l := range i.Limits {
-		offset, _ := i.offset[l.Interval]
-		duration := time.Duration(offset+1) * l.Interval
-		expires := i.start.Add(duration)
-		allExpired = allExpired && expires.Before(t)
+func (i *IntervalWindow) Wait(ctx context.Context) error { return i.WaitN(ctx, 1) }
+
+func (i *IntervalWindow) WaitN(ctx context.Context, n int) error {
+	r, err := i.ReserveN(ctx, n)
+	if err != nil {
+		return err
 	}
-	if allExpired {
-		i.start = time.Now().Truncate(time.Second).Add(time.Second)
+	timer := time.NewTimer(r.Delay())
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return nil
+	case <-r.ctx.Done():
+		return ErrTimeout
+	}
+}
+
+func (i *IntervalWindow) Cleanup() int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if len(i.reservations) == 0 {
+		return 0
+	}
+	now := time.Now()
+	temp := make([]*Reservation, 0, len(i.reservations)/2)
+	for _, reservation := range i.reservations {
 		for _, l := range i.Limits {
-			i.offset[l.Interval] = 0
-			i.count[l.Interval] = 0
+			if now.Before(reservation.time.Add(2 * l.Interval)) {
+				temp = append(temp, reservation)
+				break
+			}
 		}
 	}
-}
-
-func (i *IntervalWindow) resetIntervals(t time.Time) {
-	for _, l := range i.Limits {
-		offset, _ := i.offset[l.Interval]
-		for i.start.Add(time.Duration(offset+1) * l.Interval).Before(t) {
-			i.offset[l.Interval] = offset + 1
-			i.count[l.Interval] = 0
-			offset++
-		}
-	}
-}
-
-func (i *IntervalWindow) incrementN(n uint) {
-	for _, l := range i.Limits {
-		i.count[l.Interval] += n
-	}
+	count := len(i.reservations) - len(temp)
+	i.reservations = temp
+	return count
 }

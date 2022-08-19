@@ -5,14 +5,12 @@ import (
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
+	"sync"
+	"sync/atomic"
 	"time"
 	"weeb_bot/internal/riot"
 	"weeb_bot/internal/storage/couch"
 	"weeb_bot/internal/storage/postgres"
-)
-
-const (
-	maxTries = 3
 )
 
 type RiotGroup struct {
@@ -165,58 +163,54 @@ func (g *RiotGroup) GetMatchHistory(s *riot.Summoner, region riot.Region) {
 	start := time.Now().AddDate(0, -3, 0)
 	start = time.Date(start.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
 	options := &riot.MatchIdsOptions{StartTime: start.Unix(), Count: 100}
-	var tries, count, failed int
+	var count, failed atomic.Int64
 	defer func() {
-		log.Debugf("Got Matches for %s: saved %d, failed %d", s.SummonerName, count, failed)
+		log.Debugf("Got Matches for %s: saved %d, failed %d", s.SummonerName, count.Load(), failed.Load())
 	}()
 
+	matchQueue := make([]string, 0, 100)
 	for {
 		matches, err := g.Api.MatchIds(ctx, region, s.Puuid, options)
 		if err != nil {
-			tries += 1
-			if tries <= maxTries {
-				continue
-			}
-			log.Errorf("Failed to get matches for %s: %v", s.SummonerName, err)
+			log.Errorf("Failed to get match ids for %s: %v", s.SummonerName, err)
 			return
 		}
 		log.Debugf("%d <- %#v", len(matches), options)
-		if len(matches) == 0 {
-			return
-		}
+
 		// Remove retrieved matches
 		ids, err := g.Couch.FilterMatchIds(ctx, matches)
 		if err != nil {
-			tries += 1
-			if tries <= maxTries {
-				continue
-			}
 			log.Errorf("Failed to get matches for %s: %v", s.SummonerName, err)
 			return
 		}
+		matchQueue = append(matchQueue, ids...)
 
-		for _, id := range ids {
-			match, err := g.Api.Match(ctx, region, id)
-			if err != nil {
-				log.Errorf("Failed to get match %s for %s: %v", id, s.SummonerName, err)
-				failed++
-				continue
-			}
-			log.Debugf("Got match %d", count)
-			err = g.Couch.AddMatch(ctx, match)
-			if err != nil {
-				log.Errorf("Failed to store match %s for %s: %v", id, s.SummonerName, err)
-				failed++
-				continue
-			}
-			count++
-		}
-
-		if len(matches) != int(options.Count) {
+		if len(matches) < int(options.Count) {
 			break
 		}
 
-		tries = 0
 		options.Start += int32(options.Count)
 	}
+	wg := sync.WaitGroup{}
+	for _, id := range matchQueue {
+		go func(id string) {
+			wg.Add(1)
+			defer wg.Done()
+			match, err := g.Api.Match(ctx, region, id)
+			if err != nil {
+				log.Errorf("Failed to get match %s for %s: %v", id, s.SummonerName, err)
+				failed.Add(1)
+				return
+			}
+			log.Debugf("Got match %d", count.Load())
+			err = g.Couch.AddMatch(ctx, match)
+			if err != nil {
+				log.Errorf("Failed to store match %s for %s: %v", id, s.SummonerName, err)
+				failed.Add(1)
+				return
+			}
+			count.Add(1)
+		}(id)
+	}
+	wg.Wait()
 }
