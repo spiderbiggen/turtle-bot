@@ -7,18 +7,19 @@ import (
 )
 
 var (
-	ErrTimeout       = errors.New("context timed out")
-	ErrBurstExceeded = errors.New("burst exceeded limit")
+	ErrTimeout          = errors.New("context timed out")
+	ErrBurstExceeded    = errors.New("burst exceeded limit")
+	ErrInvalidBurstSize = errors.New("invalid burst size")
 )
 
 type Limiter interface {
-	Wait(ctx context.Context) (Incrementer, error)
-	WaitBurst(ctx context.Context, n uint) (Incrementer, error)
+	Reserve(ctx context.Context) (*Reservation, error)
+	ReserveN(ctx context.Context, n int) (*Reservation, error)
+	Wait(ctx context.Context) error
+	WaitN(ctx context.Context, n int) error
 }
 
 type Limit struct {
-	Count    uint
+	Count    int
 	Interval time.Duration
 }
-
-type Incrementer func()
