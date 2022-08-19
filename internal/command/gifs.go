@@ -217,7 +217,7 @@ func gifCommand(tenor *tenor.Client, memCache *cache.Cache, gifText string, quer
 				return
 			}
 			message = fmt.Sprintf(gifText, mention, gif)
-			_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: message})
+			_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &message})
 			if err != nil {
 				log.Errorf("discord failed to complete interaction message: %v", err)
 				_ = s.InteractionResponseDelete(i.Interaction)
