@@ -1,10 +1,10 @@
 package command
 
 import (
+	"context"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
-	"golang.org/x/net/context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,7 +80,7 @@ func (g *RiotGroup) HandleInteraction(s *discordgo.Session, i *discordgo.Interac
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: content,
-				Flags:   uint64(discordgo.MessageFlagsEphemeral),
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		if err != nil {
@@ -107,7 +107,7 @@ func (g *RiotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCr
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: uint64(discordgo.MessageFlagsEphemeral),
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 	if err != nil {
@@ -141,13 +141,13 @@ func (g *RiotGroup) linkHandler(s *discordgo.Session, i *discordgo.InteractionCr
 
 	select {
 	case msg := <-cs:
-		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: msg})
+		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg})
 		if err != nil {
 			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Errorf("discord failed to respond with a message: %v", err)
 		}
 	case msg := <-ce:
-		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: msg})
+		_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg})
 		if err != nil {
 			log.Errorf("discord failed to respond with an error message: %v", err)
 		}
