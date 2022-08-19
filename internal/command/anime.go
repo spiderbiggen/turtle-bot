@@ -59,7 +59,7 @@ func (a *animeGroup) HandleInteraction(s *discordgo.Session, i *discordgo.Intera
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: content,
-				Flags:   uint64(discordgo.MessageFlagsEphemeral),
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		if err != nil {
@@ -83,7 +83,7 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Please provide a title",
-				Flags:   uint64(discordgo.MessageFlagsEphemeral),
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		if err != nil {
@@ -95,7 +95,7 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: uint64(discordgo.MessageFlagsEphemeral),
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 	if err != nil {
@@ -152,9 +152,10 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 				Default: i == 0,
 			})
 		}
+		msg := "Select result below"
 		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: "Select result below",
-			Components: []discordgo.MessageComponent{
+			Content: &msg,
+			Components: &[]discordgo.MessageComponent{
 				discordgo.ActionsRow{Components: []discordgo.MessageComponent{
 					discordgo.SelectMenu{
 						CustomID: "anime_select",
@@ -168,7 +169,7 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 			log.Errorf("discord failed to respond with a message: %v", err)
 		}
 	case msg := <-ce:
-		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: msg})
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg})
 		if err != nil {
 			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Errorf("discord failed to respond with an error message: %v", err)
@@ -207,7 +208,7 @@ func (a *animeGroup) HandleComponent(s *discordgo.Session, i *discordgo.Interact
 			Type: discordgo.InteractionResponseChannelMessageWithSource,
 			Data: &discordgo.InteractionResponseData{
 				Content: "Please select an option",
-				Flags:   uint64(discordgo.MessageFlagsEphemeral),
+				Flags:   discordgo.MessageFlagsEphemeral,
 			},
 		})
 		if err != nil {
@@ -218,7 +219,7 @@ func (a *animeGroup) HandleComponent(s *discordgo.Session, i *discordgo.Interact
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Flags: uint64(discordgo.MessageFlagsEphemeral),
+			Flags: discordgo.MessageFlagsEphemeral,
 		},
 	})
 	if err != nil {
@@ -245,15 +246,16 @@ func (a *animeGroup) HandleComponent(s *discordgo.Session, i *discordgo.Interact
 
 	select {
 	case <-cs:
+		msg := fmt.Sprintf("Successfully subscribed to %s", id)
 		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: fmt.Sprintf("Successfully subscribed to %s", id),
+			Content: &msg,
 		})
 		if err != nil {
 			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Errorf("discord failed to respond with an error message: %v", err)
 		}
 	case msg := <-ce:
-		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: msg})
+		_, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg})
 		if err != nil {
 			_ = s.InteractionResponseDelete(i.Interaction)
 			log.Errorf("discord failed to respond with an error message: %v", err)
