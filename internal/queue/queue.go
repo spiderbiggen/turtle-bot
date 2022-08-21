@@ -6,103 +6,67 @@ import (
 )
 
 var (
-	ErrEmpty            = errors.New("queue was empty")
-	ErrCapacityExceeded = errors.New("queue capacity exceeds limits")
-	ErrIndexOutOfRange  = errors.New("index out of range")
+	ErrNoElements = errors.New("no elements in queue")
 )
 
 // Queue is a concurrency-safe rotating queue implementation.
 type Queue[T any] struct {
-	Data     []*T
-	capacity int
-	current  int
-	size     int
+	data     []*T
+	baseSize int
 	mu       *sync.RWMutex
 }
 
-func New[T any](cap int) Queue[T] {
+func New[T any](base int) Queue[T] {
 	return Queue[T]{
-		Data:     make([]*T, cap),
-		capacity: cap,
+		data:     make([]*T, 0, base),
+		baseSize: base,
 		mu:       &sync.RWMutex{},
 	}
 }
 
-func (q *Queue[T]) Len() int               { return q.size }
-func (q *Queue[T]) Cap() int               { return q.capacity }
-func (q *Queue[T]) rollOver(index int) int { return index % q.capacity }
-func (q *Queue[T]) index(offset int) int   { return q.rollOver(q.current + offset) }
+func (q *Queue[T]) Len() int { return len(q.data) }
 
-func (q *Queue[T]) Push(data T) error {
+func (q *Queue[T]) Append(data *T) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.size >= q.capacity {
-		return ErrCapacityExceeded
-	}
-	i := q.index(q.size)
-	q.Data[i] = &data
-	q.size++
-	return nil
+	q.data = append(q.data, data)
+}
+
+func (q *Queue[T]) AppendMany(data []*T) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.data = append(q.data, data...)
 }
 
 func (q *Queue[T]) Pop() (*T, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	el := q.Data[q.current]
-	if el == nil {
-		return nil, ErrEmpty
+	if len(q.data) == 0 {
+		return nil, ErrNoElements
 	}
-	q.Data[q.current] = nil
-	q.size--
-	if q.size == 0 {
-		q.current = 0
-	} else {
-		q.current = q.index(1)
+	var result *T
+	result, q.data = q.data[0], q.data[1:]
+	if len(q.data) == 0 {
+		q.data = make([]*T, 0, q.baseSize)
 	}
-	return el, nil
+	return result, nil
 }
 
-func (q *Queue[T]) Peek() (*T, error) {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	el := q.Data[q.current]
-	if el == nil {
-		return nil, ErrEmpty
-	}
-	return el, nil
-}
-
-func (q *Queue[T]) TryPeek() *T {
-	a, _ := q.Peek()
-	return a
-}
-
-func (q *Queue[T]) PeekIndex(index int) (*T, error) {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	if index < 0 || index >= q.size {
-		return nil, ErrIndexOutOfRange
-	}
-	i := q.rollOver(q.current + index)
-	return q.Data[i], nil
-}
-
-func (q *Queue[T]) Remaining() []*T {
-	q.mu.RLock()
-	defer q.mu.RUnlock()
-	if q.size == 0 {
+// PopN pops up to n elements from the queue
+func (q *Queue[T]) PopN(n int) []*T {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	l := len(q.data)
+	if l == 0 {
 		return nil
 	}
-	result := make([]*T, q.size)
-	m, r := q.current+q.size, 0
-	if m > q.capacity {
-		r = m - q.capacity
-		m = q.capacity
+	if n > l {
+		n = l
 	}
-
-	copy(result, q.Data[q.current:m])
-	if r > 0 {
-		copy(result[m-q.current:], q.Data[:r])
+	var result []*T
+	result, q.data = q.data[:n], q.data[n:]
+	if len(q.data) == 0 {
+		q.data = make([]*T, 0, q.baseSize)
 	}
 	return result
 }
