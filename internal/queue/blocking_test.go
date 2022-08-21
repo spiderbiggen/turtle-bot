@@ -7,7 +7,7 @@ import (
 func TestQueue_RemainingFilled(t *testing.T) {
 	runes := "abcdefghijklmnopqrstuvwxyz"
 	capacity := 20
-	q := New[rune](capacity)
+	q := NewBlocking[rune](capacity)
 	for _, r := range runes {
 		err := q.Push(r)
 		if err == ErrCapacityExceeded {
@@ -29,7 +29,7 @@ func TestQueue_RemainingFilled(t *testing.T) {
 func TestQueue_RemainingSinglePass(t *testing.T) {
 	runes := "abcdefghijklmnopqrstuvwxyz"
 	capacity, rem := 20, 15
-	q := New[rune](capacity)
+	q := NewBlocking[rune](capacity)
 	for _, r := range runes {
 		err := q.Push(r)
 		if err == ErrCapacityExceeded {

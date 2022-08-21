@@ -5,26 +5,19 @@ import (
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
-	"sync"
 	"sync/atomic"
 	"time"
 	"weeb_bot/internal/riot"
 	"weeb_bot/internal/storage/couch"
 	"weeb_bot/internal/storage/postgres"
+	"weeb_bot/internal/worker"
 )
 
 type RiotGroup struct {
 	Api   *riot.Client
 	Db    *postgres.Client
 	Couch *couch.Client
-}
-
-func NewRiotGroup(api *riot.Client, store *postgres.Client, couch *couch.Client) InteractionHandler {
-	return &RiotGroup{
-		Api:   api,
-		Db:    store,
-		Couch: couch,
-	}
+	Queue worker.MatchQueue
 }
 
 func (g *RiotGroup) InteractionID() string { return "lol" }
@@ -191,26 +184,6 @@ func (g *RiotGroup) GetMatchHistory(s *riot.Summoner, region riot.Region) {
 
 		options.Start += int32(options.Count)
 	}
-	wg := sync.WaitGroup{}
-	for _, id := range matchQueue {
-		go func(id string) {
-			wg.Add(1)
-			defer wg.Done()
-			match, err := g.Api.Match(ctx, region, id)
-			if err != nil {
-				log.Errorf("Failed to get match %s for %s: %v", id, s.SummonerName, err)
-				failed.Add(1)
-				return
-			}
-			log.Debugf("Got match %d", count.Load())
-			err = g.Couch.AddMatch(ctx, match)
-			if err != nil {
-				log.Errorf("Failed to store match %s for %s: %v", id, s.SummonerName, err)
-				failed.Add(1)
-				return
-			}
-			count.Add(1)
-		}(id)
-	}
-	wg.Wait()
+	g.Queue.AddMatchIds(matchQueue...)
+	g.Queue.Start()
 }
