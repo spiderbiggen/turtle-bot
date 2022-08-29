@@ -106,25 +106,11 @@ func (c *Client) Init(ctx context.Context) error {
             }
         }
         for (const d of doc.info.participants) {
-            emObject([d.puuid, d.queueId], d);
+            emObject([d.puuid, doc.info.queueId], d);
         }
     }
 }`,
-				"reduce": `function(keys, values, rereduce) {
-    if (rereduce) {
-        var count = values.reduce(function (a, b) {
-            return a + b.count
-        }, 0)
-        var s = values.reduce(function (a, b) {
-            return a + b.sum
-        }, 0)
-        return s / count
-    } else {
-        var count = values.length
-        var s = sum(values)
-        return {count: count, sum: s}
-    }
-}`,
+				"reduce": "_stats",
 			},
 		},
 	})
