@@ -53,7 +53,7 @@ func (q *Queue[T]) Pop() (*T, error) {
 }
 
 // PopN pops up to n elements from the queue
-func (q *Queue[T]) PopN(n int) []*T {
+func (q *Queue[T]) PopN(n int) []T {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	l := len(q.data)
@@ -63,8 +63,14 @@ func (q *Queue[T]) PopN(n int) []*T {
 	if n > l {
 		n = l
 	}
-	var result []*T
-	result, q.data = q.data[:n], q.data[n:]
+	result := make([]T, 0, n)
+	for _, t := range q.data[:n] {
+		if t != nil {
+			result = append(result, *t)
+		}
+	}
+
+	q.data = q.data[n:]
 	if len(q.data) == 0 {
 		q.data = make([]*T, 0, q.baseSize)
 	}

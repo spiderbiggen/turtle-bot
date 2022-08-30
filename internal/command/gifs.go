@@ -244,6 +244,7 @@ func getGif(ctx context.Context, t *tenor.Client, m *cache.Cache, c chan string,
 			gifs = cast
 		}
 	}
+
 	if len(gifs) == 0 {
 		gifs, err = t.Search(ctx, q.Query, tenor.WithLimit(50), tenor.WithRandom(!q.IsSearch))
 		if err != nil {

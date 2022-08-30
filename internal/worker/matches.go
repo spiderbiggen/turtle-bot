@@ -64,7 +64,8 @@ func (m *MatchWorker) Cancel() {
 func (m *MatchWorker) AddMatchIds(ids ...string) {
 	mIds := make([]*string, len(ids))
 	for i, id := range ids {
-		mIds[i] = &id
+		id2 := id
+		mIds[i] = &id2
 	}
 	m.ids.AppendMany(mIds)
 }
@@ -77,7 +78,7 @@ func (m *MatchWorker) getMatches() {
 	c := make(chan *riot.Match)
 	for i, id := range ids {
 		go func(i int, id string) {
-			match, err := m.api.Match(ctx, riot.NA1, id)
+			match, err := m.api.Match(ctx, riot.EUW1, id)
 			if err != nil {
 				log.Errorf("Failed to get match: %v", err)
 				m.ids.Append(&id)
@@ -85,7 +86,7 @@ func (m *MatchWorker) getMatches() {
 				return
 			}
 			c <- match
-		}(i, *id)
+		}(i, id)
 	}
 	for range ids {
 		select {
