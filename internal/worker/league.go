@@ -7,6 +7,7 @@ import (
 	"sort"
 	"weeb_bot/internal/riot"
 	couch2 "weeb_bot/internal/storage/couch"
+	"weeb_bot/internal/storage/models"
 	postgres2 "weeb_bot/internal/storage/postgres"
 )
 
@@ -32,7 +33,7 @@ func MatchChecker(db *postgres2.Client, couch *couch2.Client, client *riot.Clien
 	}
 }
 
-func (w *LeagueWorker) downloadMatches(ctx context.Context, summoners []*riot.Summoner) {
+func (w *LeagueWorker) downloadMatches(ctx context.Context, summoners []*models.RiotAccount) {
 	if len(summoners) == 0 {
 		return
 	}
@@ -56,7 +57,7 @@ func (w *LeagueWorker) downloadMatches(ctx context.Context, summoners []*riot.Su
 	w.getMatches(ctx, dst)
 }
 
-func (w *LeagueWorker) lastMatchesForSummoners(ctx context.Context, summoners []*riot.Summoner) ([]string, error) {
+func (w *LeagueWorker) lastMatchesForSummoners(ctx context.Context, summoners []*models.RiotAccount) ([]string, error) {
 	c := len(summoners)
 	if c == 0 {
 		return nil, nil

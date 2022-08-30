@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 	"weeb_bot/internal/riot"
+	"weeb_bot/internal/storage/models"
 )
 
 type summoner struct {
@@ -14,38 +15,44 @@ type summoner struct {
 	RevisionDate  time.Time `db:"revision_date"`
 	ProfileIconId int       `db:"profile_icon_id"`
 	SummonerLevel int       `db:"summoner_level"`
+	Region        uint8     `db:"region"`
 }
 
-func entityToSummoner(s summoner) *riot.Summoner {
-	return &riot.Summoner{
-		Id:            s.ID,
-		AccountId:     s.AccountId,
-		Puuid:         s.Puuid,
-		SummonerName:  s.SummonerName,
-		ProfileIconId: s.ProfileIconId,
-		RevisionDate:  s.RevisionDate.UnixMilli(),
-		SummonerLevel: s.SummonerLevel,
+func entityToRiotAccount(s summoner) models.RiotAccount {
+	return models.RiotAccount{
+		Summoner: riot.Summoner{
+			Id:            s.ID,
+			AccountId:     s.AccountId,
+			Puuid:         s.Puuid,
+			SummonerName:  s.SummonerName,
+			ProfileIconId: s.ProfileIconId,
+			RevisionDate:  s.RevisionDate.UnixMilli(),
+			SummonerLevel: s.SummonerLevel,
+		},
+		Region: riot.Region(s.Region),
 	}
 }
 
-func entityFromSummoner(r *riot.Summoner) *summoner {
-	return &summoner{
-		ID:            r.Id,
-		AccountId:     r.AccountId,
-		Puuid:         r.Puuid,
-		SummonerName:  r.SummonerName,
-		RevisionDate:  time.UnixMilli(r.RevisionDate),
-		ProfileIconId: r.ProfileIconId,
-		SummonerLevel: r.SummonerLevel,
+func entityFromRiotAccount(acc models.RiotAccount) summoner {
+	return summoner{
+		ID:            acc.Id,
+		AccountId:     acc.AccountId,
+		Puuid:         acc.Puuid,
+		SummonerName:  acc.SummonerName,
+		RevisionDate:  time.UnixMilli(acc.RevisionDate),
+		ProfileIconId: acc.ProfileIconId,
+		SummonerLevel: acc.SummonerLevel,
+		Region:        uint8(acc.Region),
 	}
 }
 
 type discordUserHasLeagueUser struct {
 	DiscordID string `db:"discord_id"`
 	LeagueID  string `db:"league_id"`
+	ChannelID string `db:"channel_id"`
 }
 
-func (c *Client) InsertDiscordSummoner(ctx context.Context, userID string, riotSummoner *riot.Summoner) error {
+func (c *Client) InsertDiscordSummoner(ctx context.Context, userID, channelID string, acc models.RiotAccount) error {
 	conn, err := c.Connection()
 	if err != nil {
 		return err
@@ -55,31 +62,33 @@ func (c *Client) InsertDiscordSummoner(ctx context.Context, userID string, riotS
 		return err
 	}
 	stmt, err := tx.PrepareNamed(`
-		INSERT INTO league_user (id, account_id, puuid, profile_icon_id, summoner_name, summoner_level, revision_date)
-		VALUES (:id, :account_id, :puuid, :profile_icon_id, :summoner_name, :summoner_level, :revision_date)
+		INSERT INTO league_user (id, account_id, puuid, profile_icon_id, summoner_name, summoner_level, revision_date, region)
+		VALUES (:id, :account_id, :puuid, :profile_icon_id, :summoner_name, :summoner_level, :revision_date, :region)
 		ON CONFLICT (id) DO UPDATE SET account_id      = :account_id,
 								  puuid           = :puuid,
 								  profile_icon_id = :profile_icon_id,
 								  summoner_name   = :summoner_name,
 								  summoner_level  = :summoner_level,
-								  revision_date   = :revision_date
+								  revision_date   = :revision_date,
+								  region = :region
 	`)
 	if err != nil {
 		return err
 	}
-	if _, err = stmt.ExecContext(ctx, entityFromSummoner(riotSummoner)); err != nil {
+	if _, err = stmt.ExecContext(ctx, entityFromRiotAccount(acc)); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
 	stmt, err = tx.PrepareNamed(`
-		INSERT INTO discord_user_has_league_user (discord_id, league_id)
-		VALUES (:discord_id, :league_id)
-		ON CONFLICT (discord_id) DO UPDATE SET league_id = :league_id
+		INSERT INTO discord_user_has_league_user (discord_id, league_id, channel_id)
+		VALUES (:discord_id, :league_id, :channel_id)
+		ON CONFLICT (discord_id) DO UPDATE SET league_id = :league_id, channel_id = :channel_id
 	`)
 	if err != nil {
 		return err
 	}
-	if _, err = stmt.ExecContext(ctx, discordUserHasLeagueUser{DiscordID: userID, LeagueID: riotSummoner.Id}); err != nil {
+	rel := discordUserHasLeagueUser{DiscordID: userID, LeagueID: acc.Id, ChannelID: channelID}
+	if _, err = stmt.ExecContext(ctx, rel); err != nil {
 		_ = tx.Rollback()
 		return err
 	}
@@ -92,7 +101,7 @@ func (c *Client) InsertDiscordSummoner(ctx context.Context, userID string, riotS
 	return nil
 }
 
-func (c *Client) GetSummoners(ctx context.Context) ([]*riot.Summoner, error) {
+func (c *Client) GetSummoners(ctx context.Context) ([]*models.RiotAccount, error) {
 	conn, err := c.Connection()
 	if err != nil {
 		return nil, err
@@ -101,9 +110,27 @@ func (c *Client) GetSummoners(ctx context.Context) ([]*riot.Summoner, error) {
 	if err = conn.SelectContext(ctx, &s, "SELECT * FROM league_user"); err != nil {
 		return nil, err
 	}
-	r := make([]*riot.Summoner, len(s))
+	r := make([]*models.RiotAccount, len(s))
 	for i, s2 := range s {
-		r[i] = entityToSummoner(s2)
+		acc := entityToRiotAccount(s2)
+		r[i] = &acc
 	}
 	return r, nil
+}
+
+func (c *Client) GetDiscordSummoner(ctx context.Context, userID string) (channelID string, account *models.RiotAccount, err error) {
+	conn, err := c.Connection()
+	if err != nil {
+		return
+	}
+	var rel struct {
+		summoner
+		discordUserHasLeagueUser
+	}
+	query := "SELECT * FROM discord_user_has_league_user du JOIN league_user lu ON lu.id = du.league_id WHERE discord_id = $1"
+	if err = conn.GetContext(ctx, &rel, query, userID); err != nil {
+		return
+	}
+	acc := entityToRiotAccount(rel.summoner)
+	return rel.ChannelID, &acc, nil
 }
