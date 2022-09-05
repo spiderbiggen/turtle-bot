@@ -4,24 +4,15 @@ import (
 	"context"
 	log "github.com/sirupsen/logrus"
 	"math"
+	"turtle-bot/internal/stats"
+	"turtle-bot/internal/storage/models"
 )
 
-type StatResult struct {
-	Sum   float64 `json:"sum"`
-	Count int     `json:"count"`
-	Min   float64 `json:"min"`
-	Max   float64 `json:"max"`
-}
-
-func (r *StatResult) Average() float64 {
-	return r.Sum / float64(r.Count)
-}
-
-func (c *Client) GetAverages(ctx context.Context, puuid string) (map[string]StatResult, error) {
+func (c *Client) GetAverages(ctx context.Context, puuid string) (stats.StatMap, error) {
 	return c.GetQueueAverages(ctx, -1, puuid)
 }
 
-func (c *Client) GetQueueAverages(ctx context.Context, queueID int, puuID string) (map[string]StatResult, error) {
+func (c *Client) GetQueueAverages(ctx context.Context, queueID int, puuID string) (stats.StatMap, error) {
 	db, err := c.DB()
 	if err != nil {
 		return nil, err
@@ -43,10 +34,10 @@ func (c *Client) GetQueueAverages(ctx context.Context, queueID int, puuID string
 		},
 	)
 	defer rs.Close()
-	result := make(map[string]StatResult)
+	result := make(stats.StatMap)
 	for rs.Next() {
 		var key []interface{}
-		var value StatResult
+		var value stats.StatResult
 		_ = rs.ScanKey(&key)
 		err := rs.ScanValue(&value)
 		if err != nil {
@@ -54,15 +45,16 @@ func (c *Client) GetQueueAverages(ctx context.Context, queueID int, puuID string
 			return nil, err
 		}
 		if k, ok := key[len(key)-1].(string); ok {
-			if v, ok := result[k]; ok {
-				result[k] = StatResult{
+			mKey := models.ChallengeType(k)
+			if v, ok := result[mKey]; ok {
+				result[mKey] = stats.StatResult{
 					Sum:   v.Sum + value.Sum,
 					Count: v.Count + value.Count,
 					Min:   math.Min(v.Min, value.Min),
 					Max:   math.Max(v.Max, value.Max),
 				}
 			} else {
-				result[k] = value
+				result[mKey] = value
 			}
 		}
 	}

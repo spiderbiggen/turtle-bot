@@ -13,14 +13,14 @@ import (
 	"os/signal"
 	"strings"
 	"time"
-	"weeb_bot/internal/command"
-	kitsuApi "weeb_bot/internal/kitsu"
-	nyaaApi "weeb_bot/internal/nyaa"
-	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage/couch"
-	"weeb_bot/internal/storage/postgres"
-	tenorApi "weeb_bot/internal/tenor"
-	"weeb_bot/internal/worker"
+	"turtle-bot/internal/command"
+	kitsuApi "turtle-bot/internal/kitsu"
+	nyaaApi "turtle-bot/internal/nyaa"
+	"turtle-bot/internal/riot"
+	"turtle-bot/internal/storage/couch"
+	"turtle-bot/internal/storage/postgres"
+	tenorApi "turtle-bot/internal/tenor"
+	"turtle-bot/internal/worker"
 )
 
 var (

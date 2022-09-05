@@ -6,8 +6,8 @@ import (
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 	"os"
-	"weeb_bot/internal/storage"
-	"weeb_bot/internal/storage/postgres/migration"
+	"turtle-bot/internal/storage"
+	"turtle-bot/internal/storage/postgres/migration"
 )
 
 type Client struct {

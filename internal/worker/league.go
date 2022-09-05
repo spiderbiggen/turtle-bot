@@ -5,10 +5,10 @@ import (
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"sort"
-	"weeb_bot/internal/riot"
-	couch2 "weeb_bot/internal/storage/couch"
-	"weeb_bot/internal/storage/models"
-	postgres2 "weeb_bot/internal/storage/postgres"
+	"turtle-bot/internal/riot"
+	couch2 "turtle-bot/internal/storage/couch"
+	"turtle-bot/internal/storage/models"
+	postgres2 "turtle-bot/internal/storage/postgres"
 )
 
 type LeagueWorker struct {

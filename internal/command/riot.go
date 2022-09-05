@@ -10,11 +10,12 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage/couch"
-	"weeb_bot/internal/storage/models"
-	"weeb_bot/internal/storage/postgres"
-	"weeb_bot/internal/worker"
+	"turtle-bot/internal/riot"
+	"turtle-bot/internal/stats"
+	"turtle-bot/internal/storage/couch"
+	"turtle-bot/internal/storage/models"
+	"turtle-bot/internal/storage/postgres"
+	"turtle-bot/internal/worker"
 )
 
 var (
@@ -190,7 +191,7 @@ func (g *RiotGroup) averageHandler(s *discordgo.Session, i *discordgo.Interactio
 		return
 	}
 	type response struct {
-		Stats    map[string]couch.StatResult
+		Stats    stats.StatMap
 		Summoner riot.Summoner
 	}
 

@@ -3,8 +3,8 @@ package postgres
 import (
 	"context"
 	"time"
-	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage/models"
+	"turtle-bot/internal/riot"
+	"turtle-bot/internal/storage/models"
 )
 
 type summoner struct {

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"weeb_bot/internal/limiter"
+	"turtle-bot/internal/limiter"
 )
 
 var (
