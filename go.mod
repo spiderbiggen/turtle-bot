@@ -3,7 +3,7 @@ module weeb_bot
 go 1.19
 
 require (
-	github.com/bwmarrin/discordgo v0.26.0
+	github.com/bwmarrin/discordgo v0.26.1
 	github.com/go-kivik/couchdb/v4 v4.0.0-20220217152009-9380cf8517a0
 	github.com/go-kivik/kivik/v4 v4.0.0-20220330131300-9effce90869a
 	github.com/jmoiron/sqlx v1.3.5
