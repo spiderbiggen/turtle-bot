@@ -1,6 +1,8 @@
 package models
 
-import "weeb_bot/internal/riot"
+import (
+	"turtle-bot/internal/riot"
+)
 
 type RiotAccount struct {
 	riot.Summoner

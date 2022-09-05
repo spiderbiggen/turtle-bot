@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"time"
-	"weeb_bot/internal/tenor"
+	"turtle-bot/internal/tenor"
 )
 
 type WeightedArgument struct {

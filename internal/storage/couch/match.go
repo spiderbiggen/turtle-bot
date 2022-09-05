@@ -3,7 +3,7 @@ package couch
 import (
 	"context"
 	log "github.com/sirupsen/logrus"
-	"weeb_bot/internal/riot"
+	"turtle-bot/internal/riot"
 )
 
 func (c *Client) AddMatch(ctx context.Context, match *riot.Match) error {

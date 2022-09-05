@@ -1,4 +1,4 @@
-module weeb_bot
+module turtle-bot
 
 go 1.19
 
