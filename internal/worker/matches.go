@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"sync/atomic"
 	"time"
-	"weeb_bot/internal/queue"
-	"weeb_bot/internal/riot"
-	"weeb_bot/internal/storage/couch"
+	"turtle-bot/internal/queue"
+	"turtle-bot/internal/riot"
+	"turtle-bot/internal/storage/couch"
 )
 
 type MatchWorker struct {

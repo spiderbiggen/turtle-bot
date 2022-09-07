@@ -7,8 +7,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"time"
-	kitsuApi "weeb_bot/internal/kitsu"
-	"weeb_bot/internal/storage/postgres"
+	kitsuApi "turtle-bot/internal/kitsu"
+	"turtle-bot/internal/storage/postgres"
 )
 
 type animeGroup struct {
@@ -121,17 +121,17 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 				if imageUrl := coverImage(anime.Cover, anime.Poster); imageUrl != "" {
 					image = imageUrl
 				}
-				var time sql.NullTime
+				var sTime sql.NullTime
 				if anime.CreatedAt != nil {
-					time.Time = *anime.CreatedAt
-					time.Valid = true
+					sTime.Time = *anime.CreatedAt
+					sTime.Valid = true
 				}
 				err := a.db.InsertAnime(ctx, &postgres.Anime{
 					ID:             anime.ID,
 					CanonicalTitle: anime.CanonicalTitle,
 					QueryTitle:     anime.CanonicalTitle,
 					ImageURL:       image,
-					CreatedAt:      time,
+					CreatedAt:      sTime,
 				})
 				if err != nil {
 					log.Warnf("Failed to insert anime result: %v", err)

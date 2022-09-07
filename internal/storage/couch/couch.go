@@ -8,7 +8,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"os"
 	"time"
-	"weeb_bot/internal/storage"
+	"turtle-bot/internal/storage"
 )
 
 type Client struct {

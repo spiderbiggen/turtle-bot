@@ -7,7 +7,7 @@ import (
 	"os"
 	"sync"
 	"time"
-	"weeb_bot/internal/riot"
+	"turtle-bot/internal/riot"
 )
 
 func main() {
