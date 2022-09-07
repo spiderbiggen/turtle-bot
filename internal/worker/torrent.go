@@ -9,9 +9,9 @@ import (
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
-	kitsuApi "weeb_bot/internal/kitsu"
-	"weeb_bot/internal/nyaa"
-	"weeb_bot/internal/storage/postgres"
+	kitsuApi "turtle-bot/internal/kitsu"
+	"turtle-bot/internal/nyaa"
+	"turtle-bot/internal/storage/postgres"
 )
 
 type nyaaWorker struct {
