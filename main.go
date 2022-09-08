@@ -190,17 +190,14 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 		if err != nil {
 			log.Fatalln(err)
 		}
-		if db.Enabled {
-			rito := worker.MatchChecker(db, couch, client)
-			cmd := func() {
-				timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
-				defer cancelFunc()
-				rito(timeout, s)
-			}
-			_, err = cron.AddFunc("*/5 * * * *", cmd)
-			if err != nil {
-				log.Fatalln(err)
-			}
+		rito := worker.MatchChecker(db, couch, client)
+		cmd := func() {
+			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancelFunc()
+			rito(timeout, s)
+		}
+		if _, err = cron.AddFunc("*/5 * * * *", cmd); err != nil {
+			log.Fatalln(err)
 		}
 		cron.Start()
 	}
@@ -210,6 +207,7 @@ func migrateDatabases(db *postgres.Client, couchdb *couch.Client) {
 	go func() {
 		if err := db.Migrate(); err != nil {
 			log.Errorf("Error migrating database: %v", err)
+			panic(err)
 		} else {
 			log.Debugf("Finished migration")
 		}
@@ -219,6 +217,7 @@ func migrateDatabases(db *postgres.Client, couchdb *couch.Client) {
 		defer cancel()
 		if err := couchdb.Init(ctx); err != nil {
 			log.Errorf("Error initializing database: %v", err)
+			panic(err)
 		}
 	}()
 }
