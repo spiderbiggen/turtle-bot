@@ -168,7 +168,6 @@ o:
 
 func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
-		matchQueue := worker.NewMatchWorker(client, couch)
 		// Register commands if discord is ready
 		registerCommands(s,
 			&command.Apex{Client: tenor, Cache: memCache},
@@ -176,7 +175,7 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 			&command.Hurry{Client: tenor, Cache: memCache},
 			&command.Morb{Client: tenor, Cache: memCache},
 			&command.Sleep{Client: tenor, Cache: memCache},
-			&command.RiotGroup{Api: client, Db: db, Couch: couch, Queue: matchQueue},
+			&command.RiotGroup{Api: client, Db: db},
 			command.AnimeGroup(kitsu, db),
 		)
 
