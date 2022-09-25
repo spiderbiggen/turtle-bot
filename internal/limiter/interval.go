@@ -15,17 +15,13 @@ type IntervalWindow struct {
 	reservations []*Reservation
 	counts       map[time.Duration]int
 	windowStart  map[time.Duration]time.Time
-	mu           *sync.Mutex
+	mu           sync.Mutex
 	cleanup      bool
 }
 
 func NewIntervalWindow(limits ...Limit) *IntervalWindow {
-	var maxInterval time.Duration
 	var minBurst = math.MaxInt
 	for _, l := range limits {
-		if l.Interval > maxInterval {
-			maxInterval = l.Interval
-		}
 		if l.Count < minBurst {
 			minBurst = l.Count
 		}
@@ -33,11 +29,10 @@ func NewIntervalWindow(limits ...Limit) *IntervalWindow {
 
 	return &IntervalWindow{
 		Limits:      limits,
-		maxInterval: maxInterval,
 		maxBurst:    minBurst,
 		counts:      make(map[time.Duration]int),
 		windowStart: make(map[time.Duration]time.Time),
-		mu:          &sync.Mutex{},
+		mu:          sync.Mutex{},
 	}
 }
 
@@ -83,16 +78,16 @@ func (i *IntervalWindow) ReserveN(ctx context.Context, n int) (*Reservation, err
 		return reservation, nil
 	} else {
 		var earliestAvailableStart = now
-		for _, l := range i.Limits {
-			s := i.windowStart[l.Interval]
-			if c, _ := i.counts[l.Interval]; c+n > l.Count {
-				s = s.Add(l.Interval)
+		for _, limit := range i.Limits {
+			s := i.windowStart[limit.Interval]
+			if windowCount, _ := i.counts[limit.Interval]; windowCount+n > limit.Count {
+				s = s.Add(limit.Interval)
 			}
 			if s.After(earliestAvailableStart) {
 				earliestAvailableStart = s
 			}
 		}
-		if dl, ok := ctx.Deadline(); ok && earliestAvailableStart.After(dl) {
+		if dl, ok := ctx.Deadline(); ok && !earliestAvailableStart.Before(dl) {
 			return nil, ErrTimeout
 		}
 		reservation = &Reservation{count: n, time: earliestAvailableStart, ctx: ctx}

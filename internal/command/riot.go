@@ -8,14 +8,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 	log "github.com/sirupsen/logrus"
 	"strings"
-	"sync/atomic"
 	"time"
 	"turtle-bot/internal/riot"
 	"turtle-bot/internal/stats"
-	"turtle-bot/internal/storage/couch"
 	"turtle-bot/internal/storage/models"
 	"turtle-bot/internal/storage/postgres"
-	"turtle-bot/internal/worker"
 )
 
 var (
@@ -23,10 +20,8 @@ var (
 )
 
 type RiotGroup struct {
-	Api   *riot.Client
-	Db    *postgres.Client
-	Couch *couch.Client
-	Queue worker.MatchQueue
+	Api *riot.Client
+	Db  *postgres.Client
 }
 
 func (g *RiotGroup) InteractionID() string { return "lol" }
@@ -84,6 +79,17 @@ func (g *RiotGroup) Command() *discordgo.ApplicationCommand {
 
 func (g *RiotGroup) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	options := i.ApplicationCommandData().Options
+	if err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "LoL commands are under construction",
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	}); err != nil {
+		log.Errorf("discord failed to respond with an error message: %v", err)
+	}
+	return
+	// TODO Under construction
 	log.Debugf("Responding to lol.%s", options[0].Name)
 	switch options[0].Name {
 	case "link":
@@ -212,13 +218,8 @@ func (g *RiotGroup) averageHandler(s *discordgo.Session, i *discordgo.Interactio
 			ce <- err
 			return
 		}
-		avg, err := g.Couch.GetQueueAverages(ctx, 440, summoner.Puuid)
-		if err != nil {
-			ce <- err
-			return
-		}
-
-		cs <- response{Stats: avg, Summoner: summoner.Summoner}
+		// TODO link to league-stat-server
+		cs <- response{Stats: nil, Summoner: summoner.Summoner}
 	}()
 
 	select {
@@ -267,39 +268,40 @@ func (g *RiotGroup) averageHandler(s *discordgo.Session, i *discordgo.Interactio
 }
 
 func (g *RiotGroup) GetMatchHistory(acc models.RiotAccount) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	start := time.Now().AddDate(0, -3, 0)
-	start = time.Date(start.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
-	options := &riot.MatchIdsOptions{StartTime: start.Unix(), Count: 100}
-	var count, failed atomic.Int64
-	defer func() {
-		log.Debugf("Got Matches for %s: saved %d, failed %d", acc.SummonerName, count.Load(), failed.Load())
-	}()
-
-	matchQueue := make([]string, 0, 100)
-	for {
-		matches, err := g.Api.MatchIds(ctx, acc.Region, acc.Puuid, options)
-		if err != nil {
-			log.Errorf("Failed to get match ids for %s: %v", acc.SummonerName, err)
-			return
-		}
-		log.Debugf("%d <- %#v", len(matches), options)
-
-		// Remove retrieved matches
-		ids, err := g.Couch.FilterMatchIds(ctx, matches)
-		if err != nil {
-			log.Errorf("Failed to get matches for %s: %v", acc.SummonerName, err)
-			return
-		}
-		matchQueue = append(matchQueue, ids...)
-
-		if len(matches) < int(options.Count) {
-			break
-		}
-
-		options.Start += int32(options.Count)
-	}
-	g.Queue.AddMatchIds(matchQueue...)
-	g.Queue.Start()
+	// TODO move to league-stat-server
+	//ctx, cancel := context.WithCancel(context.Background())
+	//defer cancel()
+	//start := time.Now().AddDate(0, -3, 0)
+	//start = time.Date(start.Year(), time.January, 1, 0, 0, 0, 0, time.UTC)
+	//options := &riot.MatchIdsOptions{StartTime: start.Unix(), Count: 100}
+	//var count, failed atomic.Int64
+	//defer func() {
+	//	log.Debugf("Got Matches for %s: saved %d, failed %d", acc.SummonerName, count.Load(), failed.Load())
+	//}()
+	//
+	//matchQueue := make([]string, 0, 100)
+	//for {
+	//	matches, err := g.Api.MatchIds(ctx, acc.Region, acc.Puuid, options)
+	//	if err != nil {
+	//		log.Errorf("Failed to get match ids for %s: %v", acc.SummonerName, err)
+	//		return
+	//	}
+	//	log.Debugf("%d <- %#v", len(matches), options)
+	//
+	//	// Remove retrieved matches
+	//	ids, err := g.Couch.FilterMatchIds(ctx, matches)
+	//	if err != nil {
+	//		log.Errorf("Failed to get matches for %s: %v", acc.SummonerName, err)
+	//		return
+	//	}
+	//	matchQueue = append(matchQueue, ids...)
+	//
+	//	if len(matches) < int(options.Count) {
+	//		break
+	//	}
+	//
+	//	options.Start += int32(options.Count)
+	//}
+	//g.Queue.AddMatchIds(matchQueue...)
+	//g.Queue.Start()
 }
