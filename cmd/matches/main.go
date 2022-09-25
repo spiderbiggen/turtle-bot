@@ -41,7 +41,10 @@ func main() {
 		go func(id string) {
 			wg.Add(1)
 			defer wg.Done()
-			_, _ = api.Match(ctx, riot.EUW1, id)
+			_, err := api.Match(ctx, riot.EUW1, id)
+			if err != nil {
+				log.Error(err)
+			}
 		}(id)
 	}
 	wg.Wait()
