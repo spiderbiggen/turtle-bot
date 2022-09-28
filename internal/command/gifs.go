@@ -11,6 +11,15 @@ import (
 	"turtle-bot/internal/tenor"
 )
 
+type DayOfMonth struct {
+	Month time.Month
+	Day   int
+}
+
+func (d DayOfMonth) Time(in time.Time) time.Time {
+	return time.Date(in.Year(), d.Month, d.Day, 0, 0, 0, 0, in.Location())
+}
+
 type WeightedArgument struct {
 	Url      string
 	Query    string
@@ -19,12 +28,12 @@ type WeightedArgument struct {
 	IsSearch bool
 }
 
-type Args []*WeightedArgument
+type Args []WeightedArgument
 
-func (a Args) Pick() *WeightedArgument {
+func (a Args) Pick() WeightedArgument {
 	switch len(a) {
 	case 0:
-		return nil
+		return WeightedArgument{}
 	case 1:
 		return a[0]
 	}
@@ -44,6 +53,35 @@ func (a Args) Pick() *WeightedArgument {
 		}
 	}
 	return a[len(a)-1]
+}
+
+type SeasonArgument struct {
+	Season  string
+	Start   DayOfMonth
+	End     DayOfMonth
+	Options Args
+}
+
+type GifCommand struct {
+	Format  string
+	Seasons []SeasonArgument
+	Options Args
+}
+
+func (c *GifCommand) Args(now time.Time) Args {
+	if len(c.Seasons) == 0 {
+		return c.Options
+	}
+
+	for _, season := range c.Seasons {
+		// Return season Options if now is between season start and end
+		if !now.Before(season.Start.Time(now)) && !now.After(season.End.Time(now).AddDate(0, 0, 1)) {
+			log.Debugf("Selecting seasonal gif. It's %s!", season.Season)
+			return season.Options
+		}
+	}
+
+	return c.Options
 }
 
 type Apex struct {
@@ -69,8 +107,10 @@ func (c *Apex) Command() *discordgo.ApplicationCommand {
 func (c *Apex) InteractionID() string { return "apex" }
 
 func (c *Apex) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, c.Cache, "Time for Apex\nLet's go %[1]s\n%[2]s",
-		&WeightedArgument{Query: "Apex Legends"},
+	gifCommand(c.Client, c.Cache,
+		GifCommand{Format: "Time for Apex\nLet's go %[1]s\n%[2]s",
+			Options: Args{{Query: "Apex Legends"}},
+		},
 	)(s, i)
 }
 
@@ -99,8 +139,10 @@ func (c *Hurry) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Hurry) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, c.Cache, "Hurry up %[1]s\n%[2]s",
-		&WeightedArgument{Query: "hurry up"},
+	gifCommand(c.Client, c.Cache,
+		GifCommand{Format: "Hurry up %[1]s\n%[2]s",
+			Options: Args{{Query: "hurry up"}},
+		},
 	)(s, i)
 }
 
@@ -129,9 +171,7 @@ func (c *Play) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Play) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, c.Cache, "Let's go %[1]s\n%[2]s",
-		&WeightedArgument{Query: "games"},
-	)(s, i)
+	gifCommand(c.Client, c.Cache, GifCommand{Format: "Let's go %[1]s\n%[2]s", Options: Args{{Query: "games"}}})(s, i)
 }
 
 type Sleep struct {
@@ -151,10 +191,36 @@ func (c *Sleep) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, c.Cache, "%[2]s",
-		&WeightedArgument{Query: "sleep", Weight: 80},
-		&WeightedArgument{Query: "night", Weight: 70},
-		&WeightedArgument{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624", Weight: 1},
+	gifCommand(c.Client, c.Cache,
+		GifCommand{
+			Format: "%[2]s",
+			Seasons: []SeasonArgument{
+				{
+					Season: "Halloween",
+					Start:  DayOfMonth{Month: time.October, Day: 1},
+					End:    DayOfMonth{Month: time.October, Day: 31},
+					Options: Args{
+						{Query: "Halloween sleep", Weight: 120, GifCount: 20, IsSearch: true},
+						{Url: "https://www.youtube.com/watch?v=n_qbGJuxCYY", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=gDWmjHfU8ag", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=cOSxxj9SVN0", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=00pPqN6sYFo", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=fN1yErlWjIs", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=oP1IiV3OWno", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=oVQQUQtlxxM", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=vUzay2eNGhc", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=_C0fxoot-7c", Weight: 3},
+						{Url: "https://www.youtube.com/watch?v=-fzFHdT7xao", Weight: 3},
+						{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624"},
+					},
+				},
+			},
+			Options: Args{
+				{Query: "sleep", Weight: 80},
+				{Query: "night", Weight: 70},
+				{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624"},
+			},
+		},
 	)(s, i)
 }
 
@@ -173,10 +239,14 @@ func (c *Morb) Command() *discordgo.ApplicationCommand {
 }
 
 func (c *Morb) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	gifCommand(c.Client, c.Cache, "%[2]s",
-		&WeightedArgument{Query: "Morbius"},
-		&WeightedArgument{Query: "Morbin"},
-		&WeightedArgument{Query: "Morb"},
+	gifCommand(c.Client, c.Cache, GifCommand{
+		Format: "%[2]s",
+		Options: Args{
+			WeightedArgument{Query: "Morbius"},
+			WeightedArgument{Query: "Morbin"},
+			WeightedArgument{Query: "Morb"},
+		},
+	},
 	)(s, i)
 }
 
@@ -188,10 +258,11 @@ func (u *User) mention() string {
 	}
 }
 
-func gifCommand(tenor *tenor.Client, memCache *cache.Cache, gifText string, queries ...*WeightedArgument) Handler {
+func gifCommand(tenor *tenor.Client, memCache *cache.Cache, gifCommand GifCommand) Handler {
 	return func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
+		queries := gifCommand.Args(time.Now())
 		if len(queries) == 0 {
 			log.Errorf("No queries for command %s", i.Interaction.ID)
 			return
@@ -216,7 +287,7 @@ func gifCommand(tenor *tenor.Client, memCache *cache.Cache, gifText string, quer
 				_ = s.InteractionResponseDelete(i.Interaction)
 				return
 			}
-			message = fmt.Sprintf(gifText, mention, gif)
+			message = fmt.Sprintf(gifCommand.Format, mention, gif)
 			_, err = s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &message})
 			if err != nil {
 				log.Errorf("discord failed to complete interaction message: %v", err)
@@ -229,8 +300,8 @@ func gifCommand(tenor *tenor.Client, memCache *cache.Cache, gifText string, quer
 	}
 }
 
-func getGif(ctx context.Context, t *tenor.Client, m *cache.Cache, c chan string, queries []*WeightedArgument) {
-	q := Args(queries).Pick()
+func getGif(ctx context.Context, t *tenor.Client, m *cache.Cache, c chan string, queries Args) {
+	q := queries.Pick()
 	log.Debugf("Using query %+v", q)
 	if q.Url != "" {
 		c <- q.Url
