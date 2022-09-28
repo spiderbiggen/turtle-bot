@@ -17,7 +17,6 @@ import (
 	kitsuApi "turtle-bot/internal/kitsu"
 	nyaaApi "turtle-bot/internal/nyaa"
 	"turtle-bot/internal/riot"
-	"turtle-bot/internal/storage/couch"
 	"turtle-bot/internal/storage/postgres"
 	tenorApi "turtle-bot/internal/tenor"
 	"turtle-bot/internal/worker"
@@ -54,19 +53,18 @@ func main() {
 
 	log.Debugln("Migrating database...")
 	db := postgres.New()
-	couchdb := couch.New()
 	kitsu := kitsuApi.New()
 	nyaa := nyaaApi.New()
 	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
 	client := riot.New(os.Getenv("RIOT_KEY"))
 	memCache := cache.New(5*time.Minute, 10*time.Minute)
-	migrateDatabases(db, couchdb)
+	go migrateDatabases(db)
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, couchdb, client, kitsu, nyaa, tenor, memCache))
+	d.AddHandler(readyHandler(cron, db, client, kitsu, nyaa, tenor, memCache))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -166,7 +164,7 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
@@ -189,34 +187,14 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, couch *couch.Client, 
 		if err != nil {
 			log.Fatalln(err)
 		}
-		rito := worker.MatchChecker(db, couch, client)
-		cmd := func() {
-			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
-			defer cancelFunc()
-			rito(timeout, s)
-		}
-		if _, err = cron.AddFunc("*/5 * * * *", cmd); err != nil {
-			log.Fatalln(err)
-		}
-		cron.Start()
 	}
 }
 
-func migrateDatabases(db *postgres.Client, couchdb *couch.Client) {
-	go func() {
-		if err := db.Migrate(); err != nil {
-			log.Errorf("Error migrating database: %v", err)
-			panic(err)
-		} else {
-			log.Debugf("Finished migration")
-		}
-	}()
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := couchdb.Init(ctx); err != nil {
-			log.Errorf("Error initializing database: %v", err)
-			panic(err)
-		}
-	}()
+func migrateDatabases(db *postgres.Client) {
+	if err := db.Migrate(); err != nil {
+		log.Errorf("Error migrating database: %v", err)
+		panic(err)
+	} else {
+		log.Debugf("Finished migration")
+	}
 }
