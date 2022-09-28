@@ -10,9 +10,9 @@ func TestWeightedArgument(t *testing.T) {
 	tolerance := 0.01
 	weight := 0.0
 	list := Args{
-		&WeightedArgument{Query: "sleep", Weight: 80},
-		&WeightedArgument{Query: "night", Weight: 70},
-		&WeightedArgument{Query: "froggers", Weight: 1, GifCount: 1, IsSearch: true},
+		{Query: "sleep", Weight: 80},
+		{Query: "night", Weight: 70},
+		{Query: "froggers", Weight: 1, GifCount: 1, IsSearch: true},
 	}
 	for _, argument := range list {
 		weight += float64(argument.Weight)
