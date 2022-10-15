@@ -91,13 +91,28 @@ func (c *Client) GetSubscriptions(ctx context.Context, queryTitle string) (*Anim
 	if err != nil {
 		return nil, err
 	}
-	var anime Anime
-	if err = conn.GetContext(ctx, &anime, "SELECT * FROM anime WHERE query_title ILIKE $1", queryTitle); err != nil {
+	var anime []Anime
+	if err = conn.SelectContext(ctx, &anime, "SELECT * FROM anime WHERE query_title ILIKE $1", queryTitle); err != nil {
 		return nil, fmt.Errorf("get anime: %w", err)
 	}
-	var subs []*AnimeSubscription
-	if err = conn.SelectContext(ctx, &subs, "SELECT * FROM anime_has_subscriptions WHERE anime_id = $1", anime.ID); err != nil {
-		return nil, fmt.Errorf("select subs for %s: %w", anime.ID, err)
+	if len(anime) == 0 {
+		return nil, fmt.Errorf("get anime: %w", sql.ErrNoRows)
 	}
-	return &AnimeWithSubscriptions{Anime: &anime, Subs: subs}, nil
+	group := anime[0]
+	for _, item := range anime {
+		if item.CreatedAt.Valid {
+			if !group.CreatedAt.Valid {
+				group = item
+				continue
+			} else if item.CreatedAt.Time.After(group.CreatedAt.Time) {
+				group = item
+			}
+		}
+	}
+
+	var subs []*AnimeSubscription
+	if err = conn.SelectContext(ctx, &subs, "SELECT * FROM anime_has_subscriptions WHERE anime_id = $1", group.ID); err != nil {
+		return nil, fmt.Errorf("select subs for %s: %w", group.ID, err)
+	}
+	return &AnimeWithSubscriptions{Anime: &group, Subs: subs}, nil
 }
