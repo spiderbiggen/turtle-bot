@@ -45,9 +45,6 @@ func main() {
 	}
 	log.SetLevel(level)
 
-	hostname, _ := os.Hostname()
-	log.Infof("Starting Weeb Bot on %s", hostname)
-
 	cron := cronLib.New()
 	defer cron.Stop()
 
@@ -84,6 +81,8 @@ func main() {
 		log.Fatal("Error opening discord connection,", err)
 	}
 	defer func() { _ = d.Close() }()
+	hostname, _ := os.Hostname()
+	log.Infof("Started Turtle Bot on %s", hostname)
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
