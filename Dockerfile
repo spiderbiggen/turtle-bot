@@ -21,4 +21,4 @@ WORKDIR /opt
 COPY --from=Builder /turtle-bot /turtle-bot
 
 EXPOSE 8080
-ENTRYPOINT ["/turtle-bot", "-level=info"]
+ENTRYPOINT ["/turtle-bot", "-level=trace"]

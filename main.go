@@ -186,6 +186,9 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, client *riot.Client, 
 			defer cancelFunc()
 			nyaa(timeout, s)
 		})
+		timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancelFunc()
+		nyaa(timeout, s)
 		if err != nil {
 			log.Fatalln(err)
 		}
