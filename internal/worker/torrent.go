@@ -55,7 +55,7 @@ func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, gro
 		if errors.Is(err, sql.ErrNoRows) {
 			return
 		}
-		log.Warnf("Failed to get subscriptions: %v", err)
+		log.Errorf("Failed to get subscriptions: %v", err)
 		return
 	}
 	for _, sub := range aSubs.Subs {
