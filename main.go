@@ -176,8 +176,11 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, client *riot.Client, 
 			command.AnimeGroup(kitsu, db),
 		)
 
+		now := time.Now()
+		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+
 		var err error
-		nyaa := worker.NyaaCheck(db, kitsu, nyaa)
+		nyaa := worker.NyaaCheck(db, kitsu, nyaa, startOfDay)
 		_, err = cron.AddFunc("*/30 * * * *", func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancelFunc()
