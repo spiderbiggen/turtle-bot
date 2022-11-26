@@ -62,6 +62,7 @@ func main() {
 		log.Fatal(err)
 	}
 	d.AddHandler(readyHandler(cron, db, client, kitsu, nyaa, tenor, memCache))
+	d.AddHandler(disconnectHandler(cron))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -190,6 +191,15 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, client *riot.Client, 
 			log.Fatalln(err)
 		}
 		cron.Start()
+	}
+}
+
+func disconnectHandler(cron *cronLib.Cron) func(s *discordgo.Session, i *discordgo.Disconnect) {
+	return func(s *discordgo.Session, i *discordgo.Disconnect) {
+		cron.Stop()
+		for _, e := range cron.Entries() {
+			cron.Remove(e.ID)
+		}
 	}
 }
 
