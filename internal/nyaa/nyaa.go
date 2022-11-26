@@ -58,7 +58,6 @@ func (c *Client) Episodes(ctx context.Context) ([]Group, error) {
 			}
 			a, err := c.getAnime(ctc, u)
 			if err != nil {
-
 				ch <- episodesResult{Err: err}
 				return
 			}
