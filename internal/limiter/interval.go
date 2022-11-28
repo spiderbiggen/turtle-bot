@@ -46,7 +46,7 @@ func (i *IntervalWindow) StartCleanup() {
 				select {
 				case <-t.C:
 					count := i.Cleanup()
-					log.Debugf("Cleaned up %d old reservations", count)
+					log.Tracef("Cleaned up %d old reservations", count)
 				}
 			}
 		}()
