@@ -16,7 +16,6 @@ import (
 	"turtle-bot/internal/command"
 	kitsuApi "turtle-bot/internal/kitsu"
 	nyaaApi "turtle-bot/internal/nyaa"
-	"turtle-bot/internal/riot"
 	"turtle-bot/internal/storage/postgres"
 	tenorApi "turtle-bot/internal/tenor"
 	"turtle-bot/internal/worker"
@@ -53,7 +52,6 @@ func main() {
 	kitsu := kitsuApi.New()
 	nyaa := nyaaApi.New()
 	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
-	client := riot.New(os.Getenv("RIOT_KEY"))
 	memCache := cache.New(5*time.Minute, 10*time.Minute)
 	go migrateDatabases(db)
 
@@ -61,8 +59,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, client, kitsu, nyaa, tenor, memCache))
-	d.AddHandler(disconnectHandler(cron))
+	d.AddHandler(readyHandler(cron, db, kitsu, nyaa, tenor, memCache))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -164,7 +161,7 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, client *riot.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
@@ -173,33 +170,24 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, client *riot.Client, 
 			&command.Hurry{Client: tenor, Cache: memCache},
 			&command.Morb{Client: tenor, Cache: memCache},
 			&command.Sleep{Client: tenor, Cache: memCache},
-			&command.RiotGroup{Api: client, Db: db},
 			command.AnimeGroup(kitsu, db),
 		)
 
-		now := time.Now()
-		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-
 		var err error
-		nyaa := worker.NyaaCheck(db, kitsu, nyaa, startOfDay)
-		_, err = cron.AddFunc("*/30 * * * *", func() {
-			timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
-			defer cancelFunc()
-			nyaa(timeout, s)
-		})
-		if err != nil {
-			log.Fatalln(err)
+		if len(cron.Entries()) < 1 {
+			now := time.Now()
+			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+			nyaaWorker := worker.NyaaCheck(db, kitsu, nyaa, startOfDay)
+			_, err = cron.AddFunc("*/30 * * * *", func() {
+				timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancelFunc()
+				nyaaWorker(timeout, s)
+			})
+			if err != nil {
+				log.Fatalln(err)
+			}
 		}
 		cron.Start()
-	}
-}
-
-func disconnectHandler(cron *cronLib.Cron) func(s *discordgo.Session, i *discordgo.Disconnect) {
-	return func(s *discordgo.Session, i *discordgo.Disconnect) {
-		cron.Stop()
-		for _, e := range cron.Entries() {
-			cron.Remove(e.ID)
-		}
 	}
 }
 
