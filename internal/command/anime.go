@@ -144,8 +144,12 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 
 	select {
 	case results := <-cr:
-		options := make([]discordgo.SelectMenuOption, 0, len(results))
-		for _, result := range results {
+		resultCount := len(results)
+		if resultCount > 5 {
+			resultCount = 6
+		}
+		options := make([]discordgo.SelectMenuOption, 0, resultCount)
+		for _, result := range results[:resultCount] {
 			options = append(options, discordgo.SelectMenuOption{
 				Label: result.CanonicalTitle,
 				Value: result.ID,
