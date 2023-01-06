@@ -90,7 +90,7 @@ func (k *Client) SearchAnime(ctx context.Context, title string) ([]*Anime, error
 	if title != "" {
 		q.Add("filter[text]", title)
 	}
-	q.Add("page[limit]", "5")
+	q.Add("page[limit]", "50")
 	q.Add("page[offset]", "0")
 	u.RawQuery = q.Encode()
 
