@@ -13,9 +13,9 @@ import (
 	"os/signal"
 	"strings"
 	"time"
+	animeApi "turtle-bot/internal/anime"
 	"turtle-bot/internal/command"
 	kitsuApi "turtle-bot/internal/kitsu"
-	nyaaApi "turtle-bot/internal/nyaa"
 	"turtle-bot/internal/storage/postgres"
 	tenorApi "turtle-bot/internal/tenor"
 	"turtle-bot/internal/worker"
@@ -50,7 +50,7 @@ func main() {
 	log.Debugln("Migrating database...")
 	db := postgres.New()
 	kitsu := kitsuApi.New()
-	nyaa := nyaaApi.New()
+	anime := animeApi.New()
 	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
 	memCache := cache.New(5*time.Minute, 10*time.Minute)
 	go migrateDatabases(db)
@@ -59,7 +59,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, kitsu, nyaa, tenor, memCache))
+	d.AddHandler(readyHandler(cron, db, kitsu, anime, tenor, memCache))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -161,7 +161,7 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaaApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(cron *cronLib.Cron, db *postgres.Client, kitsu *kitsuApi.Client, anime *animeApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
@@ -177,8 +177,8 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, kitsu *kitsuApi.Clien
 		if len(cron.Entries()) < 1 {
 			now := time.Now()
 			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-			nyaaWorker := worker.NyaaCheck(db, kitsu, nyaa, startOfDay)
-			_, err = cron.AddFunc("*/30 * * * *", func() {
+			nyaaWorker := worker.NyaaCheck(db, kitsu, anime, startOfDay)
+			_, err = cron.AddFunc("1-59/5 * * * *", func() {
 				timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
 				defer cancelFunc()
 				nyaaWorker(timeout, s)

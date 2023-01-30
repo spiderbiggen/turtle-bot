@@ -9,8 +9,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+	"turtle-bot/internal/anime"
 	kitsuApi "turtle-bot/internal/kitsu"
-	"turtle-bot/internal/nyaa"
 	"turtle-bot/internal/storage/postgres"
 )
 
@@ -20,7 +20,7 @@ type nyaaWorker struct {
 	lastCheck time.Time
 }
 
-func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaa.Client, startTimes ...time.Time) Worker {
+func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, anime *anime.Client, startTimes ...time.Time) Worker {
 	w := nyaaWorker{db: db, kitsu: kitsu, lastCheck: time.Now()}
 	if len(startTimes) > 0 {
 		w.lastCheck = startTimes[0]
@@ -28,7 +28,7 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaa.Client, s
 
 	return func(ctx context.Context, s *discordgo.Session) {
 		checkTime := time.Now()
-		episodes, err := nyaa.Episodes(ctx)
+		episodes, err := anime.SearchAnime(ctx, "")
 		if err != nil {
 			log.Errorf("Failed to get episodes from nyaa: %v", err)
 			return
@@ -36,7 +36,7 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaa.Client, s
 
 		wg := sync.WaitGroup{}
 		for _, group := range episodes {
-			if group.FirstPublishedDate.Before(w.lastCheck) {
+			if group.Downloads[0].PublishedDate.Before(w.lastCheck) {
 				continue
 			}
 			wg.Add(1)
@@ -47,10 +47,10 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, nyaa *nyaa.Client, s
 	}
 }
 
-func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, group nyaa.Group, wg *sync.WaitGroup) {
+func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, group anime.DownloadsResult, wg *sync.WaitGroup) {
 	defer wg.Done()
 	var embed *discordgo.MessageEmbed
-	aSubs, err := w.db.GetSubscriptions(ctx, group.AnimeTitle)
+	aSubs, err := w.db.GetSubscriptions(ctx, group.Title)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return
@@ -69,10 +69,10 @@ func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, gro
 	}
 }
 
-func (w *nyaaWorker) makeEmbed(g nyaa.Group, anime *postgres.Anime) *discordgo.MessageEmbed {
+func (w *nyaaWorker) makeEmbed(g anime.DownloadsResult, anime *postgres.Anime) *discordgo.MessageEmbed {
 	title := anime.CanonicalTitle
-	if g.Episode.Number != 0 {
-		title = fmt.Sprintf("%s Ep %d", g.AnimeTitle, g.Episode.Number)
+	if g.Episode != 0 {
+		title = fmt.Sprintf("%s Ep %d", g.Title, g.Episode)
 	}
 
 	var image *discordgo.MessageEmbedImage
