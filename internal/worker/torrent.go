@@ -36,7 +36,8 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, anime *anime.Client,
 
 		wg := sync.WaitGroup{}
 		for _, group := range episodes {
-			if group.Downloads[0].PublishedDate.Before(w.lastCheck) {
+			d := group.Downloads[0]
+			if d.Resolution == "1080p" && d.PublishedDate.Before(w.lastCheck) {
 				continue
 			}
 			wg.Add(1)
