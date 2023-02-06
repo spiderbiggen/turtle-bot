@@ -27,7 +27,7 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, anime *anime.Client,
 	}
 
 	return func(ctx context.Context, s *discordgo.Session) {
-		checkTime := time.Now()
+		var checkTime time.Time
 		episodes, err := anime.SearchAnime(ctx, "")
 		if err != nil {
 			log.Errorf("Failed to get episodes from nyaa: %v", err)
@@ -36,6 +36,11 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, anime *anime.Client,
 
 		wg := sync.WaitGroup{}
 		for _, group := range episodes {
+			for _, d := range group.Downloads {
+				if d.PublishedDate.After(checkTime) {
+					checkTime = d.PublishedDate
+				}
+			}
 			d := group.Downloads[0]
 			if d.Resolution == "1080p" && d.PublishedDate.Before(w.lastCheck) {
 				continue
