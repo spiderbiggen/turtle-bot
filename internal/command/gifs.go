@@ -134,7 +134,7 @@ func (c *Warzone) Command() *discordgo.ApplicationCommand {
 	}
 }
 
-func (c *Warzone) InteractionID() string { return "apex" }
+func (c *Warzone) InteractionID() string { return "warzone" }
 
 func (c *Warzone) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	gifCommand(c.Client, c.Cache,
