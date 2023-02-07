@@ -114,6 +114,36 @@ func (c *Apex) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionC
 	)(s, i)
 }
 
+type Warzone struct {
+	*tenor.Client
+	Cache *cache.Cache
+}
+
+func (c *Warzone) Command() *discordgo.ApplicationCommand {
+	return &discordgo.ApplicationCommand{
+		Name:        "warzone",
+		Description: "Drops an warzone gif with someones name",
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionUser,
+				Name:        "user",
+				Description: "The user you want to summon",
+				Required:    false,
+			},
+		},
+	}
+}
+
+func (c *Warzone) InteractionID() string { return "apex" }
+
+func (c *Warzone) HandleInteraction(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	gifCommand(c.Client, c.Cache,
+		GifCommand{Format: "Time for Warzone\nLet's go %[1]s\n%[2]s",
+			Options: Args{{Query: "Warzone", IsSearch: true}},
+		},
+	)(s, i)
+}
+
 type Hurry struct {
 	*tenor.Client
 	Cache *cache.Cache

@@ -166,6 +166,7 @@ func readyHandler(cron *cronLib.Cron, db *postgres.Client, kitsu *kitsuApi.Clien
 		// Register commands if discord is ready
 		registerCommands(s,
 			&command.Apex{Client: tenor, Cache: memCache},
+			&command.Warzone{Client: tenor, Cache: memCache},
 			&command.Play{Client: tenor, Cache: memCache},
 			&command.Hurry{Client: tenor, Cache: memCache},
 			&command.Morb{Client: tenor, Cache: memCache},
