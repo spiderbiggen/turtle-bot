@@ -42,7 +42,7 @@ func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, anime *anime.Client,
 				}
 			}
 			d := group.Downloads[0]
-			if d.Resolution == "1080p" && d.PublishedDate.Before(w.lastCheck) {
+			if d.Resolution != "1080p" || d.PublishedDate.Before(w.lastCheck) {
 				continue
 			}
 			wg.Add(1)
