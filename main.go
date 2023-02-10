@@ -36,6 +36,15 @@ func init() {
 	rand.Seed(time.Now().Unix())
 }
 
+type AppContext struct {
+	DB       *postgres.Client
+	Kitsu    *kitsuApi.Client
+	Tenor    *tenorApi.Client
+	Anime    *animeApi.Client
+	MemCache *cache.Cache
+	Cron     *cronLib.Cron
+}
+
 func main() {
 	flag.Parse()
 	level, err := log.ParseLevel(logLevel)
@@ -44,22 +53,24 @@ func main() {
 	}
 	log.SetLevel(level)
 
-	cron := cronLib.New()
-	defer cron.Stop()
+	appContext := AppContext{
+		DB:       postgres.New(),
+		Kitsu:    kitsuApi.New(),
+		Anime:    animeApi.New(),
+		Tenor:    tenorApi.New(os.Getenv("TENOR_KEY")),
+		Cron:     cronLib.New(),
+		MemCache: cache.New(5*time.Minute, 10*time.Minute),
+	}
+	defer appContext.Cron.Stop()
 
 	log.Debugln("Migrating database...")
-	db := postgres.New()
-	kitsu := kitsuApi.New()
-	anime := animeApi.New()
-	tenor := tenorApi.New(os.Getenv("TENOR_KEY"))
-	memCache := cache.New(5*time.Minute, 10*time.Minute)
-	go migrateDatabases(db)
+	go migrateDatabases(appContext.DB)
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(cron, db, kitsu, anime, tenor, memCache))
+	d.AddHandler(readyHandler(appContext))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -161,34 +172,27 @@ o:
 	return r
 }
 
-func readyHandler(cron *cronLib.Cron, db *postgres.Client, kitsu *kitsuApi.Client, anime *animeApi.Client, tenor *tenorApi.Client, memCache *cache.Cache) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(appContext AppContext) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
-			&command.Apex{Client: tenor, Cache: memCache},
-			&command.Warzone{Client: tenor, Cache: memCache},
-			&command.Play{Client: tenor, Cache: memCache},
-			&command.Hurry{Client: tenor, Cache: memCache},
-			&command.Morb{Client: tenor, Cache: memCache},
-			&command.Sleep{Client: tenor, Cache: memCache},
-			command.AnimeGroup(kitsu, db),
+			&command.Apex{Client: appContext.Tenor, Cache: appContext.MemCache},
+			&command.Warzone{Client: appContext.Tenor, Cache: appContext.MemCache},
+			&command.Play{Client: appContext.Tenor, Cache: appContext.MemCache},
+			&command.Hurry{Client: appContext.Tenor, Cache: appContext.MemCache},
+			&command.Morb{Client: appContext.Tenor, Cache: appContext.MemCache},
+			&command.Sleep{Client: appContext.Tenor, Cache: appContext.MemCache},
+			command.AnimeGroup(appContext.Kitsu, appContext.DB),
 		)
 
-		var err error
-		if len(cron.Entries()) < 1 {
-			now := time.Now()
-			startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-			nyaaWorker := worker.NyaaCheck(db, kitsu, anime, startOfDay)
-			_, err = cron.AddFunc("1-59/5 * * * *", func() {
-				timeout, cancelFunc := context.WithTimeout(context.Background(), 20*time.Second)
-				defer cancelFunc()
-				nyaaWorker(timeout, s)
-			})
-			if err != nil {
-				log.Fatalln(err)
-			}
+		appContext.Cron.Start()
+		nyaaWorker := worker.NewTorrent(appContext.DB, appContext.Kitsu, appContext.Anime)
+		if err := nyaaWorker.Schedule(appContext.Cron, s); err != nil {
+			log.Fatalln(err)
 		}
-		cron.Start()
+		if err := nyaaWorker.Run(context.Background(), s); err != nil {
+			log.Error(err)
+		}
 	}
 }
 

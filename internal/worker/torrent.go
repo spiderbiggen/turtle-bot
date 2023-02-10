@@ -6,79 +6,118 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
-	"turtle-bot/internal/anime"
+	animeApi "turtle-bot/internal/anime"
 	kitsuApi "turtle-bot/internal/kitsu"
 	"turtle-bot/internal/storage/postgres"
 )
 
-type nyaaWorker struct {
+type TorrentWorker struct {
 	db        *postgres.Client
 	kitsu     *kitsuApi.Client
+	anime     *animeApi.Client
 	lastCheck time.Time
+	entryID   cron.EntryID
 }
 
-func NyaaCheck(db *postgres.Client, kitsu *kitsuApi.Client, anime *anime.Client, startTimes ...time.Time) Worker {
-	w := nyaaWorker{db: db, kitsu: kitsu, lastCheck: time.Now()}
-	if len(startTimes) > 0 {
-		w.lastCheck = startTimes[0]
-	}
-
-	return func(ctx context.Context, s *discordgo.Session) {
-		var checkTime time.Time
-		episodes, err := anime.SearchAnime(ctx, "")
-		if err != nil {
-			log.Errorf("Failed to get episodes from nyaa: %v", err)
-			return
-		}
-
-		wg := sync.WaitGroup{}
-		for _, group := range episodes {
-			for _, d := range group.Downloads {
-				if d.PublishedDate.After(checkTime) {
-					checkTime = d.PublishedDate
-				}
-			}
-			d := group.Downloads[0]
-			if d.Resolution != "1080p" || !d.PublishedDate.After(w.lastCheck) {
-				continue
-			}
-			wg.Add(1)
-			go w.sendToGuilds(ctx, s, group, &wg)
-		}
-		wg.Wait()
-		w.lastCheck = checkTime
-	}
+func NewTorrent(db *postgres.Client, kitsu *kitsuApi.Client, anime *animeApi.Client) TorrentWorker {
+	return TorrentWorker{db: db, kitsu: kitsu, anime: anime, lastCheck: time.Now()}
 }
 
-func (w *nyaaWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, group anime.DownloadsResult, wg *sync.WaitGroup) {
+func (w *TorrentWorker) Schedule(cron *cron.Cron, session *discordgo.Session) (err error) {
+	if w.entryID == 0 {
+		now := time.Now()
+		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		w.lastCheck = startOfDay
+		w.entryID, err = cron.AddFunc("1-59/5 * * * *", func() {
+			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancelFunc()
+			if err := w.Run(timeout, session); err != nil {
+				log.Error(err)
+			}
+		})
+		entry := cron.Entry(w.entryID)
+		log.Debugf("Scheduled Torrent Worker with id: %d, first run at: %s", w.entryID, entry.Next)
+	}
+	return
+}
+
+func (w *TorrentWorker) Run(ctx context.Context, session *discordgo.Session) error {
+	results, err := w.anime.SearchAnime(ctx, "")
+	if err != nil {
+		return fmt.Errorf("failed to get episodes from nyaa: %v", err)
+	}
+	results = w.filterAnime(results)
+	log.Debugf("found %d new episodes", len(results))
+	if len(results) == 0 {
+		return nil
+	}
+
+	wg := sync.WaitGroup{}
+	var checkTime time.Time
+	for _, group := range results {
+		for _, d := range group.Downloads {
+			if d.PublishedDate.After(checkTime) {
+				checkTime = d.PublishedDate
+			}
+		}
+		wg.Add(1)
+		go w.sendToGuilds(ctx, session, group, &wg)
+	}
+	wg.Wait()
+	w.lastCheck = checkTime
+	return nil
+}
+
+func (w *TorrentWorker) filterAnime(results []animeApi.DownloadsResult) []animeApi.DownloadsResult {
+	var filtered []animeApi.DownloadsResult
+	for _, result := range results {
+		download, found := findHdDownload(result)
+		if !found || !download.PublishedDate.After(w.lastCheck) {
+			continue
+		}
+		filtered = append(filtered, result)
+	}
+	return filtered
+}
+
+func findHdDownload(anime animeApi.DownloadsResult) (animeApi.Download, bool) {
+	for _, download := range anime.Downloads {
+		if download.Resolution == "1080p" || download.Resolution == "2160p" {
+			return download, true
+		}
+	}
+	return animeApi.Download{}, false
+}
+
+func (w *TorrentWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, group animeApi.DownloadsResult, wg *sync.WaitGroup) {
 	defer wg.Done()
-	var embed *discordgo.MessageEmbed
 	aSubs, err := w.db.GetSubscriptions(ctx, group.Title)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			log.Debugf("found no subscriptions for %v", group.Title)
 			return
 		}
 		log.Errorf("Failed to get subscriptions: %v", err)
 		return
 	}
-	for _, sub := range aSubs.Subs {
-		if embed == nil {
-			embed = w.makeEmbed(group, aSubs.Anime)
-		}
-		_, err := s.ChannelMessageSendEmbed(sub.ChannelID, embed)
-		if err != nil {
+
+	log.Debugf("found %d subscriptions for %s", len(aSubs.Subscriptions), group.Title)
+	embed := w.makeEmbed(group, aSubs.Anime)
+	for _, sub := range aSubs.Subscriptions {
+		if _, err := s.ChannelMessageSendEmbed(sub.ChannelID, &embed); err != nil {
 			log.Errorf("Failed to send download embed: %v", err)
 		}
 	}
 }
 
-func (w *nyaaWorker) makeEmbed(g anime.DownloadsResult, anime *postgres.Anime) *discordgo.MessageEmbed {
-	title := anime.CanonicalTitle
+func (w *TorrentWorker) makeEmbed(g animeApi.DownloadsResult, anime postgres.Anime) discordgo.MessageEmbed {
+	title := g.Title
 	if g.Episode != 0 {
-		title = fmt.Sprintf("%s Ep %d", g.Title, g.Episode)
+		title = fmt.Sprintf("%s Ep %d", title, g.Episode)
 	}
 
 	var image *discordgo.MessageEmbedImage
@@ -95,7 +134,7 @@ func (w *nyaaWorker) makeEmbed(g anime.DownloadsResult, anime *postgres.Anime) *
 		})
 	}
 
-	return &discordgo.MessageEmbed{
+	return discordgo.MessageEmbed{
 		Type:   discordgo.EmbedTypeRich,
 		Title:  title,
 		Fields: fields,
