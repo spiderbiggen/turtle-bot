@@ -126,7 +126,7 @@ func (a *animeGroup) searchHandler(s *discordgo.Session, i *discordgo.Interactio
 					sTime.Time = *anime.CreatedAt
 					sTime.Valid = true
 				}
-				err := a.db.InsertAnime(ctx, &postgres.Anime{
+				err := a.db.InsertAnime(ctx, postgres.Anime{
 					ID:             anime.ID,
 					CanonicalTitle: anime.CanonicalTitle,
 					QueryTitle:     anime.CanonicalTitle,
@@ -236,7 +236,7 @@ func (a *animeGroup) HandleComponent(s *discordgo.Session, i *discordgo.Interact
 
 	id := data.Values[0]
 	go func() {
-		sub := &postgres.AnimeSubscription{AnimeID: id, GuildID: i.GuildID, ChannelID: i.ChannelID}
+		sub := postgres.AnimeSubscription{AnimeID: id, GuildID: i.GuildID, ChannelID: i.ChannelID}
 		err := a.db.InsertAnimeSubscription(ctx, sub)
 		if err != nil {
 			log.Errorf("Failed to insert subscription: %v", err)

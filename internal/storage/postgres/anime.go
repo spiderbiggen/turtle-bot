@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/jmoiron/sqlx"
 )
 
 type Anime struct {
@@ -21,11 +22,11 @@ type AnimeSubscription struct {
 }
 
 type AnimeWithSubscriptions struct {
-	Anime *Anime
-	Subs  []*AnimeSubscription
+	Anime
+	Subscriptions []AnimeSubscription
 }
 
-func (c *Client) InsertAnime(ctx context.Context, anime *Anime) error {
+func (c *Client) InsertAnime(ctx context.Context, anime Anime) error {
 	conn, err := c.Connection()
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func (c *Client) InsertAnime(ctx context.Context, anime *Anime) error {
 	return nil
 }
 
-func (c *Client) InsertAnimeSubscription(ctx context.Context, sub *AnimeSubscription) error {
+func (c *Client) InsertAnimeSubscription(ctx context.Context, sub AnimeSubscription) error {
 	conn, err := c.Connection()
 	if err != nil {
 		return err
@@ -86,33 +87,18 @@ func (c *Client) InsertAnimeSubscription(ctx context.Context, sub *AnimeSubscrip
 	return nil
 }
 
-func (c *Client) GetSubscriptions(ctx context.Context, queryTitle string) (*AnimeWithSubscriptions, error) {
-	conn, err := c.Connection()
-	if err != nil {
-		return nil, err
+func (c *Client) GetSubscriptions(ctx context.Context, queryTitle string) (withSubscriptions AnimeWithSubscriptions, err error) {
+	var conn *sqlx.DB
+	if conn, err = c.Connection(); err != nil {
+		return
 	}
-	var anime []Anime
-	if err = conn.SelectContext(ctx, &anime, "SELECT * FROM anime WHERE query_title ILIKE $1", queryTitle); err != nil {
-		return nil, fmt.Errorf("get anime: %w", err)
-	}
-	if len(anime) == 0 {
-		return nil, fmt.Errorf("get anime: %w", sql.ErrNoRows)
-	}
-	group := anime[0]
-	for _, item := range anime {
-		if item.CreatedAt.Valid {
-			if !group.CreatedAt.Valid {
-				group = item
-				continue
-			} else if item.CreatedAt.Time.After(group.CreatedAt.Time) {
-				group = item
-			}
-		}
+	if err = conn.GetContext(ctx, &withSubscriptions.Anime, "SELECT * FROM anime WHERE query_title ILIKE $1 ORDER BY created_at DESC LIMIT 1", queryTitle); err != nil {
+		err = fmt.Errorf("get anime: %w", err)
+		return
 	}
 
-	var subs []*AnimeSubscription
-	if err = conn.SelectContext(ctx, &subs, "SELECT * FROM anime_has_subscriptions WHERE anime_id = $1", group.ID); err != nil {
-		return nil, fmt.Errorf("select subs for %s: %w", group.ID, err)
+	if err = conn.SelectContext(ctx, &withSubscriptions.Subscriptions, "SELECT * FROM anime_has_subscriptions WHERE anime_id = $1", withSubscriptions.Anime.ID); err != nil {
+		err = fmt.Errorf("select subs for %s: %w", withSubscriptions.Anime.ID, err)
 	}
-	return &AnimeWithSubscriptions{Anime: &group, Subs: subs}, nil
+	return
 }
