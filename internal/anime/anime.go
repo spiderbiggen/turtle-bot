@@ -14,17 +14,19 @@ var (
 	ErrHttpError = errors.New("http error")
 )
 
-type DownloadsResult struct {
-	Title         string    `json:"title"`
-	Episode       int       `json:"episode"`
+type Download struct {
+	Comments      string    `json:"comments"`
+	Resolution    string    `json:"resolution"`
+	Torrent       string    `json:"torrent"`
+	FileName      string    `json:"file_name"`
 	PublishedDate time.Time `json:"published_date"`
-	Downloads     []struct {
-		Comments      string    `json:"comments"`
-		Resolution    string    `json:"resolution"`
-		Torrent       string    `json:"torrent"`
-		FileName      string    `json:"file_name"`
-		PublishedDate time.Time `json:"published_date"`
-	} `json:"downloads"`
+}
+
+type DownloadsResult struct {
+	Title         string     `json:"title"`
+	Episode       int        `json:"episode"`
+	PublishedDate time.Time  `json:"published_date"`
+	Downloads     []Download `json:"downloads"`
 }
 
 type Client struct {
