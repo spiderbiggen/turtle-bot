@@ -27,5 +27,7 @@ func main() {
 	_ = w.Schedule(nil, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	w.Run(ctx, d)
+	if err := w.Run(ctx, d); err != nil {
+		panic(err)
+	}
 }
