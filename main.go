@@ -1,12 +1,11 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
+	"github.com/go-co-op/gocron"
 	"github.com/patrickmn/go-cache"
-	cronLib "github.com/robfig/cron/v3"
 	log "github.com/sirupsen/logrus"
 	"math/rand"
 	"os"
@@ -42,7 +41,7 @@ type AppContext struct {
 	Tenor    *tenorApi.Client
 	Anime    *animeApi.Client
 	MemCache *cache.Cache
-	Cron     *cronLib.Cron
+	Cron     *gocron.Scheduler
 }
 
 func main() {
@@ -58,13 +57,13 @@ func main() {
 		Kitsu:    kitsuApi.New(),
 		Anime:    animeApi.New(),
 		Tenor:    tenorApi.New(os.Getenv("TENOR_KEY")),
-		Cron:     cronLib.New(),
+		Cron:     gocron.NewScheduler(time.UTC),
 		MemCache: cache.New(5*time.Minute, 10*time.Minute),
 	}
 	defer appContext.Cron.Stop()
 
 	log.Debugln("Migrating database...")
-	go migrateDatabases(appContext.DB)
+	migrateDatabases(appContext.DB)
 
 	d, err := discordgo.New(fmt.Sprintf("Bot %s", os.Getenv("TOKEN")))
 	if err != nil {
@@ -185,14 +184,11 @@ func readyHandler(appContext AppContext) func(s *discordgo.Session, i *discordgo
 			command.AnimeGroup(appContext.Kitsu, appContext.DB),
 		)
 
-		appContext.Cron.Start()
 		nyaaWorker := worker.NewTorrent(appContext.DB, appContext.Kitsu, appContext.Anime)
 		if err := nyaaWorker.Schedule(appContext.Cron, s); err != nil {
 			log.Fatalln(err)
 		}
-		if err := nyaaWorker.Run(context.Background(), s); err != nil {
-			log.Error(err)
-		}
+		appContext.Cron.StartAsync()
 	}
 }
 
