@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
-	"github.com/robfig/cron/v3"
+	"github.com/go-co-op/gocron"
 	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
@@ -20,27 +20,27 @@ type TorrentWorker struct {
 	kitsu     *kitsuApi.Client
 	anime     *animeApi.Client
 	lastCheck time.Time
-	entryID   cron.EntryID
+	job       *gocron.Job
 }
 
 func NewTorrent(db *postgres.Client, kitsu *kitsuApi.Client, anime *animeApi.Client) TorrentWorker {
 	return TorrentWorker{db: db, kitsu: kitsu, anime: anime, lastCheck: time.Now()}
 }
 
-func (w *TorrentWorker) Schedule(cron *cron.Cron, session *discordgo.Session) (err error) {
-	if w.entryID == 0 {
+func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Session) (err error) {
+	if w.job == nil {
 		now := time.Now()
 		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		w.lastCheck = startOfDay
-		w.entryID, err = cron.AddFunc("1-59/5 * * * *", func() {
+		w.job, err = cron.Cron("1-59/5 * * * *").Do(func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancelFunc()
 			if err := w.Run(timeout, session); err != nil {
 				log.Error(err)
 			}
 		})
-		entry := cron.Entry(w.entryID)
-		log.Debugf("Scheduled Torrent Worker with id: %d, first run at: %s", w.entryID, entry.Next)
+
+		log.Debugf("Scheduled Torrent Worker first run at: %s", w.job.ScheduledAtTime())
 	}
 	return
 }

@@ -23,8 +23,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	w := worker.NewTorrent(db, kitsu, anime, time.Now().Add(-24*time.Hour))
+	w := worker.NewTorrent(db, kitsu, anime)
+	_ = w.Schedule(nil, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	w(ctx, d)
+	w.Run(ctx, d)
 }
