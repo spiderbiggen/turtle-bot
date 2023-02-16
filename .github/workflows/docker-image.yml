@@ -121,3 +121,35 @@ jobs:
         # This step uses the identity token to provision an ephemeral certificate
         # against the sigstore community Fulcio instance.
         run: cosign sign ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build-and-push.outputs.digest }}
+
+  deploy:
+    if: ${{ github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main' }}
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Deployment API Token
+        id: token
+        uses: fjogeleit/http-request-action@main
+        with:
+          url: ${{secrets.DEPLOY_AUTH_URL}}
+          method: 'POST'
+          timeout: 600000
+          data: >-
+            {
+              "grant_type":"password",
+              "prompt":"none", 
+              "client_id": "kube-environment",
+              "scope": "openid",
+              "username": "${{secrets.DEPLOY_USERNAME}}",
+              "password": "${{secrets.DEPLOY_PASSWORD}}"
+            }
+          contentType: "application/x-www-form-urlencoded"
+
+      - name: Update
+        id: refresh
+        uses: fjogeleit/http-request-action@main
+        with:
+          url: "${{secrets.DEPLOY_URL}}?image=${{needs.publish.outputs.tag}}"
+          method: 'PATCH'
+          timeout: 600000
+          bearerToken: ${{ fromJson(steps.token.outputs.response).access_token }}
