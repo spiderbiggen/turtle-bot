@@ -246,8 +246,10 @@ func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.Interaction
 				},
 			},
 			Options: Args{
-				{Query: "sleep", Weight: 80},
-				{Query: "night", Weight: 70},
+				{Query: "sleep", Weight: 42},
+				{Query: "dogsleep", Weight: 42},
+				{Query: "catsleep", Weight: 42},
+				{Query: "rabbitsleep", Weight: 42},
 				{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624"},
 			},
 		},
