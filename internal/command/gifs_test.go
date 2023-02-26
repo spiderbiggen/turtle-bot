@@ -10,9 +10,11 @@ func TestWeightedArgument(t *testing.T) {
 	tolerance := 0.01
 	weight := 0.0
 	list := Args{
-		{Query: "sleep", Weight: 80},
-		{Query: "night", Weight: 70},
-		{Query: "froggers", Weight: 1, GifCount: 1, IsSearch: true},
+		{Query: "sleep", Weight: 40},
+		{Query: "dogsleep", Weight: 40},
+		{Query: "catsleep", Weight: 40},
+		{Query: "rabbitsleep", Weight: 40},
+		{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624"},
 	}
 	for _, argument := range list {
 		weight += float64(argument.Weight)
@@ -24,7 +26,7 @@ func TestWeightedArgument(t *testing.T) {
 		j := 1
 		for ; j <= 10_000; j++ {
 			a := list.Pick()
-			if a.Query == "froggers" {
+			if a.Url == "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624" {
 				sum += int64(j)
 				j = -1
 				break
