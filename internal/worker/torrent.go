@@ -13,26 +13,27 @@ import (
 	animeApi "turtle-bot/internal/anime"
 	kitsuApi "turtle-bot/internal/kitsu"
 	"turtle-bot/internal/storage/postgres"
+	"turtle-bot/internal/storage/redis"
 )
 
 type TorrentWorker struct {
 	db        *postgres.Client
+	kv        *redis.Client
 	kitsu     *kitsuApi.Client
 	anime     *animeApi.Client
 	lastCheck time.Time
 	job       *gocron.Job
 }
 
-func NewTorrent(db *postgres.Client, kitsu *kitsuApi.Client, anime *animeApi.Client) TorrentWorker {
-	return TorrentWorker{db: db, kitsu: kitsu, anime: anime, lastCheck: time.Now()}
+func NewTorrent(db *postgres.Client, kv *redis.Client, kitsu *kitsuApi.Client, anime *animeApi.Client) TorrentWorker {
+	return TorrentWorker{db: db, kv: kv, kitsu: kitsu, anime: anime}
 }
 
 func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Session) (err error) {
 	if w.job == nil {
-		now := time.Now()
-		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-		w.lastCheck = startOfDay
+		w.lastCheck = w.getLastCheck()
 		w.job, err = cron.Every(5).Minute().Do(func() {
+			log.Debugf("Checking for new torrents since %s", w.lastCheck)
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancelFunc()
 			if err := w.Run(timeout, session); err != nil {
@@ -43,6 +44,24 @@ func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Sess
 		log.Debugf("Scheduled Torrent Worker first run at: %s", w.job.ScheduledAtTime())
 	}
 	return
+}
+
+func (w *TorrentWorker) getLastCheck() time.Time {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if last, err := w.kv.GetLastAnimeSync(ctx); err == nil {
+		return last
+	}
+
+	now := time.Now()
+	return time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, now.Location())
+}
+
+func (w *TorrentWorker) setLastCheck(ctx context.Context, t time.Time) error {
+	w.lastCheck = t
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	return w.kv.SetLastAnimeSync(ctx, t)
 }
 
 func (w *TorrentWorker) Run(ctx context.Context, session *discordgo.Session) error {
@@ -67,8 +86,10 @@ func (w *TorrentWorker) Run(ctx context.Context, session *discordgo.Session) err
 		wg.Add(1)
 		go w.sendToGuilds(ctx, session, group, &wg)
 	}
+	if err := w.setLastCheck(ctx, checkTime); err != nil {
+		log.Error(err)
+	}
 	wg.Wait()
-	w.lastCheck = checkTime
 	return nil
 }
 
