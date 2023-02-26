@@ -16,6 +16,7 @@ import (
 	"turtle-bot/internal/command"
 	kitsuApi "turtle-bot/internal/kitsu"
 	"turtle-bot/internal/storage/postgres"
+	"turtle-bot/internal/storage/redis"
 	tenorApi "turtle-bot/internal/tenor"
 	"turtle-bot/internal/worker"
 )
@@ -37,6 +38,7 @@ func init() {
 
 type AppContext struct {
 	DB       *postgres.Client
+	Redis    *redis.Client
 	Kitsu    *kitsuApi.Client
 	Tenor    *tenorApi.Client
 	Anime    *animeApi.Client
@@ -54,6 +56,7 @@ func main() {
 
 	appContext := AppContext{
 		DB:       postgres.New(),
+		Redis:    redis.New(),
 		Kitsu:    kitsuApi.New(),
 		Anime:    animeApi.New(),
 		Tenor:    tenorApi.New(os.Getenv("TENOR_KEY")),
@@ -184,7 +187,7 @@ func readyHandler(appContext AppContext) func(s *discordgo.Session, i *discordgo
 			command.AnimeGroup(appContext.Kitsu, appContext.DB),
 		)
 
-		nyaaWorker := worker.NewTorrent(appContext.DB, appContext.Kitsu, appContext.Anime)
+		nyaaWorker := worker.NewTorrent(appContext.DB, appContext.Redis, appContext.Kitsu, appContext.Anime)
 		if err := nyaaWorker.Schedule(appContext.Cron, s); err != nil {
 			log.Fatalln(err)
 		}
