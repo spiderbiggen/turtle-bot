@@ -10,12 +10,14 @@ import (
 	animeApi "turtle-bot/internal/anime"
 	kitsuApi "turtle-bot/internal/kitsu"
 	"turtle-bot/internal/storage/postgres"
+	"turtle-bot/internal/storage/redis"
 	"turtle-bot/internal/worker"
 )
 
 func main() {
 	log.SetLevel(log.TraceLevel)
 	db := postgres.New()
+	kv := redis.New()
 	kitsu := kitsuApi.New()
 	anime := animeApi.New()
 
@@ -23,7 +25,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	w := worker.NewTorrent(db, kitsu, anime)
+	w := worker.NewTorrent(db, kv, kitsu, anime)
 	_ = w.Schedule(nil, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
