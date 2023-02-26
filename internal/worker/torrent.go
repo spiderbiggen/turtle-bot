@@ -32,7 +32,7 @@ func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Sess
 		now := time.Now()
 		startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 		w.lastCheck = startOfDay
-		w.job, err = cron.Cron("1-59/5 * * * *").Do(func() {
+		w.job, err = cron.Every(5).Minute().Do(func() {
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancelFunc()
 			if err := w.Run(timeout, session); err != nil {
