@@ -3,6 +3,7 @@ package command
 import (
 	"math/rand"
 	"testing"
+	"time"
 )
 
 func TestWeightedArgument(t *testing.T) {
@@ -10,19 +11,23 @@ func TestWeightedArgument(t *testing.T) {
 	tolerance := 0.01
 	weight := 0.0
 	list := Args{
-		{Query: "sleep", Weight: 40},
-		{Query: "dogsleep", Weight: 40},
-		{Query: "catsleep", Weight: 40},
-		{Query: "rabbitsleep", Weight: 40},
 		{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624"},
+		{Query: "sleep", Weight: 20},
+		{Query: "dogsleep", Weight: 20},
+		{Query: "catsleep", Weight: 20},
+		{Query: "rabbitsleep", Weight: 20},
+		{Query: "ratsleep", Weight: 20},
+		{Query: "ducksleep", Weight: 20},
+		{Query: "animalsleep", Weight: 20},
 	}
 	for _, argument := range list {
-		weight += float64(argument.Weight)
+		weight += float64(argument.NormalizedWeight())
 	}
 
+	offset := time.Now().UnixMilli()
 	var sum int64
 	for i := 0; i < runs; i++ {
-		rand.Seed(int64(31 * i))
+		rand.Seed(int64(31*i) + offset)
 		j := 1
 		for ; j <= 10_000; j++ {
 			a := list.Pick()
@@ -37,7 +42,7 @@ func TestWeightedArgument(t *testing.T) {
 		}
 	}
 	avg := float64(sum) / float64(runs)
-	t.Logf("Avg: %.2f", avg)
+	t.Logf("Sum: %.2f, Avg: %.2f", weight, avg)
 	if avg < weight-weight*tolerance || avg > weight+weight*tolerance {
 		t.Errorf("Average %.2f not within %.0f of %.0f", avg, tolerance*100, weight)
 	}
