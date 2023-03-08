@@ -41,7 +41,7 @@ func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Sess
 		if err := cron.RemoveByTag(torrentWorkerTag); err != nil && err != gocron.ErrJobNotFoundWithTag {
 			return err
 		}
-		w.job, err = cron.Every(5 * time.Minute).StartAt(time.Time{}).Tag(torrentWorkerTag).Do(func() {
+		w.job, err = cron.Every(5 * time.Minute).StartAt(time.Unix(0, 0)).Tag(torrentWorkerTag).Do(func() {
 			log.Debugf("Checking for new torrents since %s", w.lastCheck)
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancelFunc()
