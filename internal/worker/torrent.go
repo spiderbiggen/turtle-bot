@@ -16,6 +16,8 @@ import (
 	"turtle-bot/internal/storage/redis"
 )
 
+const torrentWorkerTag = "nyaa"
+
 type TorrentWorker struct {
 	db        *postgres.Client
 	kv        *redis.Client
@@ -29,10 +31,17 @@ func NewTorrent(db *postgres.Client, kv *redis.Client, kitsu *kitsuApi.Client, a
 	return TorrentWorker{db: db, kv: kv, kitsu: kitsu, anime: anime}
 }
 
+func (w *TorrentWorker) Job() *gocron.Job {
+	return w.job
+}
+
 func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Session) (err error) {
 	if w.job == nil {
 		w.lastCheck = w.getLastCheck()
-		w.job, err = cron.Every(5).Minute().Do(func() {
+		if err := cron.RemoveByTag(torrentWorkerTag); err != nil {
+			return err
+		}
+		w.job, err = cron.Every(5 * time.Minute).StartAt(time.Time{}).Tag(torrentWorkerTag).Do(func() {
 			log.Debugf("Checking for new torrents since %s", w.lastCheck)
 			timeout, cancelFunc := context.WithTimeout(context.Background(), 1*time.Minute)
 			defer cancelFunc()
@@ -86,10 +95,10 @@ func (w *TorrentWorker) Run(ctx context.Context, session *discordgo.Session) err
 		wg.Add(1)
 		go w.sendToGuilds(ctx, session, group, &wg)
 	}
+	wg.Wait()
 	if err := w.setLastCheck(ctx, checkTime); err != nil {
 		log.Error(err)
 	}
-	wg.Wait()
 	return nil
 }
 
