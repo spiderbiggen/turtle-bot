@@ -28,6 +28,14 @@ type WeightedArgument struct {
 	IsSearch bool
 }
 
+func (w WeightedArgument) NormalizedWeight() uint8 {
+	if w.Weight <= 0 {
+		return 1
+	} else {
+		return w.Weight
+	}
+}
+
 type Args []WeightedArgument
 
 func (a Args) Pick() WeightedArgument {
@@ -40,14 +48,11 @@ func (a Args) Pick() WeightedArgument {
 
 	var sum int
 	for _, argument := range a {
-		if argument.Weight == 0 {
-			argument.Weight = 1
-		}
-		sum += int(argument.Weight)
+		sum += int(argument.NormalizedWeight())
 	}
 	weight := rand.Intn(sum)
 	for _, argument := range a {
-		weight -= int(argument.Weight)
+		weight -= int(argument.NormalizedWeight())
 		if weight < 0 {
 			return argument
 		}
@@ -246,12 +251,14 @@ func (c *Sleep) HandleInteraction(s *discordgo.Session, i *discordgo.Interaction
 				},
 			},
 			Options: Args{
-				{Query: "sleep", Weight: 34},
-				{Query: "dogsleep", Weight: 34},
-				{Query: "catsleep", Weight: 34},
-				{Query: "rabbitsleep", Weight: 34},
-				{Query: "ratsleep", Weight: 34},
 				{Url: "https://tenor.com/view/frog-dance-animation-cute-funny-gif-17184624"},
+				{Query: "sleep", Weight: 20},
+				{Query: "dogsleep", Weight: 20},
+				{Query: "catsleep", Weight: 20},
+				{Query: "rabbitsleep", Weight: 20},
+				{Query: "ratsleep", Weight: 20},
+				{Query: "ducksleep", Weight: 20},
+				{Query: "animalsleep", Weight: 20},
 			},
 		},
 	)(s, i)
