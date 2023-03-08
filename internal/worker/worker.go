@@ -7,6 +7,7 @@ import (
 )
 
 type Worker interface {
+	Job() *gocron.Job
 	Schedule(*gocron.Scheduler, *discordgo.Session) error
 	Run(context.Context, *discordgo.Session) error
 }
