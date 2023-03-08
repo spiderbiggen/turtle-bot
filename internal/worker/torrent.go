@@ -79,9 +79,11 @@ func (w *TorrentWorker) Run(ctx context.Context, session *discordgo.Session) err
 		return fmt.Errorf("failed to get episodes from nyaa: %v", err)
 	}
 	results = w.filterAnime(results)
-	log.Debugf("found %d new episodes", len(results))
 	if len(results) == 0 {
+		log.Debug("found no new episodes")
 		return nil
+	} else {
+		log.Infof("found %d new episodes", len(results))
 	}
 
 	wg := sync.WaitGroup{}
@@ -135,7 +137,7 @@ func (w *TorrentWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, 
 		return
 	}
 
-	log.Debugf("found %d subscriptions for %s", len(aSubs.Subscriptions), group.Title)
+	log.Infof("found %d subscriptions for %s", len(aSubs.Subscriptions), group.Title)
 	embed := w.makeEmbed(group, aSubs.Anime)
 	for _, sub := range aSubs.Subscriptions {
 		if _, err := s.ChannelMessageSendEmbed(sub.ChannelID, &embed); err != nil {
