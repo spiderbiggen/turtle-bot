@@ -44,6 +44,7 @@ type AppContext struct {
 	Anime    *animeApi.Client
 	MemCache *cache.Cache
 	Cron     *gocron.Scheduler
+	Workers  []worker.Worker
 }
 
 func main() {
@@ -63,6 +64,7 @@ func main() {
 		Cron:     gocron.NewScheduler(time.UTC),
 		MemCache: cache.New(5*time.Minute, 10*time.Minute),
 	}
+	appContext.Cron.TagsUnique()
 	defer appContext.Cron.Stop()
 
 	log.Debugln("Migrating database...")
@@ -72,7 +74,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	d.AddHandler(readyHandler(appContext))
+	d.AddHandler(readyHandler(&appContext))
 	d.AddHandler(func(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		switch i.Type {
 		case discordgo.InteractionApplicationCommand:
@@ -174,7 +176,7 @@ o:
 	return r
 }
 
-func readyHandler(appContext AppContext) func(s *discordgo.Session, i *discordgo.Ready) {
+func readyHandler(appContext *AppContext) func(s *discordgo.Session, i *discordgo.Ready) {
 	return func(s *discordgo.Session, i *discordgo.Ready) {
 		// Register commands if discord is ready
 		registerCommands(s,
