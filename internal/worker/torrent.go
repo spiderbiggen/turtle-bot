@@ -38,7 +38,7 @@ func (w *TorrentWorker) Job() *gocron.Job {
 func (w *TorrentWorker) Schedule(cron *gocron.Scheduler, session *discordgo.Session) (err error) {
 	if w.job == nil {
 		w.lastCheck = w.getLastCheck()
-		if err := cron.RemoveByTag(torrentWorkerTag); err != nil {
+		if err := cron.RemoveByTag(torrentWorkerTag); err != nil && err != gocron.ErrJobNotFoundWithTag {
 			return err
 		}
 		w.job, err = cron.Every(5 * time.Minute).StartAt(time.Time{}).Tag(torrentWorkerTag).Do(func() {
