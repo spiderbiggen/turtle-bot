@@ -3,7 +3,7 @@ module turtle-bot
 go 1.19
 
 require (
-	github.com/bwmarrin/discordgo v0.27.0
+	github.com/bwmarrin/discordgo v0.27.1
 	github.com/go-co-op/gocron v1.18.1
 	github.com/jmoiron/sqlx v1.3.5
 	github.com/lib/pq v1.10.7
