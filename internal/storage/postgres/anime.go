@@ -3,8 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
 )
 
 type Anime struct {
@@ -16,14 +15,15 @@ type Anime struct {
 }
 
 type AnimeSubscription struct {
-	AnimeID   string `db:"anime_id"`
-	GuildID   string `db:"guild_id"`
-	ChannelID string `db:"channel_id"`
+	AnimeID   sql.NullString `db:"anime_id"`
+	Substring string         `db:"substring"`
+	GuildID   string         `db:"guild_id"`
+	ChannelID string         `db:"channel_id"`
 }
 
-type AnimeWithSubscriptions struct {
-	Anime
-	Subscriptions []AnimeSubscription
+type SubscriptionWithAnime struct {
+	Subscription AnimeSubscription
+	Anime        *Anime
 }
 
 func (c *Client) InsertAnime(ctx context.Context, anime Anime) error {
@@ -67,9 +67,9 @@ func (c *Client) InsertAnimeSubscription(ctx context.Context, sub AnimeSubscript
 	}
 
 	stmt, err := tx.PrepareNamed(`
-		INSERT INTO anime_has_subscriptions (anime_id, guild_id, channel_id)
-		VALUES (:anime_id, :guild_id, :channel_id)
-		ON CONFLICT (anime_id, guild_id, channel_id) DO NOTHING
+		INSERT INTO anime_has_subscriptions (substring, guild_id, channel_id)
+		VALUES (:substring, :guild_id, :channel_id)
+		ON CONFLICT (substring, guild_id, channel_id) DO NOTHING
 	`)
 
 	if err != nil {
@@ -87,18 +87,25 @@ func (c *Client) InsertAnimeSubscription(ctx context.Context, sub AnimeSubscript
 	return nil
 }
 
-func (c *Client) GetSubscriptions(ctx context.Context, queryTitle string) (withSubscriptions AnimeWithSubscriptions, err error) {
-	var conn *sqlx.DB
-	if conn, err = c.Connection(); err != nil {
-		return
+func (c *Client) GetSubscriptions(ctx context.Context, queryTitle string) ([]SubscriptionWithAnime, error) {
+	conn, err := c.Connection()
+	if err != nil {
+		return nil, err
 	}
-	if err = conn.GetContext(ctx, &withSubscriptions.Anime, "SELECT * FROM anime WHERE query_title ILIKE $1 ORDER BY created_at DESC LIMIT 1", queryTitle); err != nil {
-		err = fmt.Errorf("get anime: %w", err)
-		return
+	var subscriptions []AnimeSubscription
+	err = conn.SelectContext(ctx, &subscriptions, "SELECT * FROM anime_has_subscriptions WHERE $1 ILIKE substring ", queryTitle)
+	if err != nil {
+		return nil, err
+	}
+	subscriptionsWithAnime := make([]SubscriptionWithAnime, len(subscriptions))
+	for i, subscription := range subscriptions {
+		subscriptionsWithAnime[i].Subscription = subscription
+		if subscription.AnimeID.Valid {
+			if err = conn.GetContext(ctx, &subscriptionsWithAnime[i].Anime, "SELECT * FROM anime WHERE id = $1", subscription.AnimeID.String); err != nil {
+				log.Errorf("get anime: %v", err)
+			}
+		}
 	}
 
-	if err = conn.SelectContext(ctx, &withSubscriptions.Subscriptions, "SELECT * FROM anime_has_subscriptions WHERE anime_id = $1", withSubscriptions.Anime.ID); err != nil {
-		err = fmt.Errorf("select subs for %s: %w", withSubscriptions.Anime.ID, err)
-	}
-	return
+	return subscriptionsWithAnime, nil
 }
