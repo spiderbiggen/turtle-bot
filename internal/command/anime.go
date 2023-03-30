@@ -25,15 +25,28 @@ func (a *animeGroup) Command() *discordgo.ApplicationCommand {
 		Name:        "anime",
 		Description: "Anime related commands",
 		Options: []*discordgo.ApplicationCommandOption{
+			//{
+			//	Type:        discordgo.ApplicationCommandOptionSubCommand,
+			//	Name:        "search",
+			//	Description: "Search anime on kitsu",
+			//	Options: []*discordgo.ApplicationCommandOption{
+			//		{
+			//			Type:        discordgo.ApplicationCommandOptionString,
+			//			Name:        "title",
+			//			Description: "Anime title",
+			//			Required:    true,
+			//		},
+			//	},
+			//},
 			{
 				Type:        discordgo.ApplicationCommandOptionSubCommand,
-				Name:        "search",
-				Description: "Search anime on kitsu",
+				Name:        "subscribe",
+				Description: "Subscribe to anime updates",
 				Options: []*discordgo.ApplicationCommandOption{
 					{
 						Type:        discordgo.ApplicationCommandOptionString,
 						Name:        "title",
-						Description: "Anime title",
+						Description: "does not need to be an exact match",
 						Required:    true,
 					},
 				},
@@ -52,6 +65,8 @@ func (a *animeGroup) HandleInteraction(s *discordgo.Session, i *discordgo.Intera
 	switch options[0].Name {
 	case "search":
 		a.searchHandler(s, i)
+	case "subscribe":
+		a.subscribeHandler(s, i)
 	default:
 		content := "Oops, something went wrong.\n" +
 			"Hol' up, you aren't supposed to see this message."
@@ -236,7 +251,7 @@ func (a *animeGroup) HandleComponent(s *discordgo.Session, i *discordgo.Interact
 
 	id := data.Values[0]
 	go func() {
-		sub := postgres.AnimeSubscription{AnimeID: id, GuildID: i.GuildID, ChannelID: i.ChannelID}
+		sub := postgres.AnimeSubscription{Substring: id, GuildID: i.GuildID, ChannelID: i.ChannelID}
 		err := a.db.InsertAnimeSubscription(ctx, sub)
 		if err != nil {
 			log.Errorf("Failed to insert subscription: %v", err)
@@ -266,5 +281,56 @@ func (a *animeGroup) HandleComponent(s *discordgo.Session, i *discordgo.Interact
 	case <-ctx.Done():
 		_ = s.InteractionResponseDelete(i.Interaction)
 		log.Warnf("Failed to send search response within 15 seconds")
+	}
+}
+
+func (a *animeGroup) subscribeHandler(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	subOptions := i.Interaction.ApplicationCommandData().Options[0].Options
+	var title string
+	for _, option := range subOptions {
+		if option.Name == "title" {
+			title = option.StringValue()
+		}
+	}
+	if title == "" {
+		err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: "Please provide a title",
+				Flags:   discordgo.MessageFlagsEphemeral,
+			},
+		})
+		if err != nil {
+			log.Errorf("Failed to respond with error: %v", err)
+		}
+		return
+	}
+
+	response := &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	}
+	if err := s.InteractionRespond(i.Interaction, response); err != nil {
+		log.Errorf("discord failed to defer interaction: %v", err)
+		return
+	}
+
+	sub := postgres.AnimeSubscription{Substring: title + "%", GuildID: i.GuildID, ChannelID: i.ChannelID}
+	if err := a.db.InsertAnimeSubscription(ctx, sub); err != nil {
+		msg := fmt.Sprintf("Failed to subscribe to %s\nInternal server error", title)
+		if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg}); err != nil {
+			_ = s.InteractionResponseDelete(i.Interaction)
+			log.Errorf("discord failed to respond with an error message: %v", err)
+		}
+		return
+	}
+	msg := fmt.Sprintf("Successfully subscribed to %s", title)
+	if _, err := s.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{Content: &msg}); err != nil {
+		_ = s.InteractionResponseDelete(i.Interaction)
+		log.Errorf("discord failed to respond with an error message: %v", err)
 	}
 }
