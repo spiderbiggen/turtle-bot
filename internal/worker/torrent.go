@@ -137,23 +137,23 @@ func (w *TorrentWorker) sendToGuilds(ctx context.Context, s *discordgo.Session, 
 		return
 	}
 
-	log.Infof("found %d subscriptions for %s", len(aSubs.Subscriptions), group.Title)
-	embed := w.makeEmbed(group, aSubs.Anime)
-	for _, sub := range aSubs.Subscriptions {
-		if _, err := s.ChannelMessageSendEmbed(sub.ChannelID, &embed); err != nil {
+	log.Infof("found %d subscriptions for %s", len(aSubs), group.Title)
+	for _, sub := range aSubs {
+		embed := w.makeEmbed(group, sub.Anime)
+		if _, err := s.ChannelMessageSendEmbed(sub.Subscription.ChannelID, embed); err != nil {
 			log.Errorf("Failed to send download embed: %v", err)
 		}
 	}
 }
 
-func (w *TorrentWorker) makeEmbed(g animeApi.DownloadsResult, anime postgres.Anime) discordgo.MessageEmbed {
+func (w *TorrentWorker) makeEmbed(g animeApi.DownloadsResult, anime *postgres.Anime) *discordgo.MessageEmbed {
 	title := g.Title
 	if g.Episode != 0 {
 		title = fmt.Sprintf("%s Ep %d", title, g.Episode)
 	}
 
 	var image *discordgo.MessageEmbedImage
-	if anime.ImageURL != "" {
+	if anime != nil && anime.ImageURL != "" {
 		image = &discordgo.MessageEmbedImage{URL: anime.ImageURL}
 	}
 
@@ -166,7 +166,7 @@ func (w *TorrentWorker) makeEmbed(g animeApi.DownloadsResult, anime postgres.Ani
 		})
 	}
 
-	return discordgo.MessageEmbed{
+	return &discordgo.MessageEmbed{
 		Type:   discordgo.EmbedTypeRich,
 		Title:  title,
 		Fields: fields,
