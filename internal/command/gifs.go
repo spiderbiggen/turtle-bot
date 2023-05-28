@@ -372,5 +372,5 @@ func getGif(ctx context.Context, t *tenor.Client, m *cache.Cache, c chan string,
 		c <- ""
 		return
 	}
-	c <- gifs[rand.Intn(len(gifs))].URL
+	c <- gifs[rand.Intn(len(gifs))].ItemURL
 }
