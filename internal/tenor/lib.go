@@ -37,9 +37,10 @@ type Response struct {
 }
 
 type Result struct {
-	ID    string `json:"id"`
-	URL   string `json:"url"`
-	Title string `json:"title"`
+	ID      string `json:"id"`
+	URL     string `json:"url"`
+	ItemURL string `json:"itemurl"`
+	Title   string `json:"title"`
 }
 
 type ResultList []*Result
