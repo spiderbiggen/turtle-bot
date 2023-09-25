@@ -10,7 +10,7 @@ require (
 	github.com/lib/pq v1.10.6
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/sirupsen/logrus v1.9.0
+	github.com/sirupsen/logrus v1.9.3
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 )
 
